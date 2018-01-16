@@ -1,0 +1,1952 @@
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<!-- *************** Extra configuration for SIS Integration package ***************** -->
+<!-- READ THIS!!!!!!!
+This file contains: 
+  - Information about connectivity to Oracle (password needs to be entered plain the first time, and encrypted after that. The password is encrypted using the license key in the datapump config.xml
+  - Scheduling information: how frequent to run the extract
+  - Scripts that validate connectivity (don't need to be changed)
+  - Scripts that create a set of temporary tables (don't need to be changed, but can be changed if the school has particular needs)
+  - List of the files to create
+  - For each file, a 'generate' flag that indicates if the file needs to be created or skipped
+  - For each file, a set of configurations including the Starfish header (do not change) and the actual sql query (may need to be changed). Some items in the sql query can be controlled with configuration items in the query. That is the preferred method to do changes, but changes to the query are ok
+  - For the attributes file, there is also a list of the attributes that need to be generated
+    - for each attribute there is a separate configuration block that has the query for that attribute
+  - For the organizations and organization memberships, there is also a list of orgs to be created
+    - for each organization and organization membership there is a separate configuration block
+-->
+
+        <!-- ***************** CONNECTION VALIDATION ******************** -->
+        <!-- [CHANGE] Set the JDBC driver and connection string to connect to your SIS -->
+        <!-- Banner, CAMS, Colleague -->
+        <entry key="SIS">Banner</entry>
+        <entry key="DBDriver">oracle.jdbc.OracleDriver</entry>
+        <entry key="DBConnection">jdbc:oracle:thin:@dbhosted-test.morehouse.edu:MC</entry>
+
+        <!-- [CHANGE] Enter username and password to your database. Run the integration with the -encrypt command in order to get a an encrypted password and replace the plain text password for the encrypted version -->
+        <entry key="DBUsername">starfish</entry>
+        <!-- need to run with -encrypt once to encrypt the password -->
+        <entry key="DBPassword">MyPassword</entry>
+
+        <!-- [DO NOT CHANGE] Set of commands used to validate that the connection is properly set. This piece is dependent on the SIS used, and can be changed if needed, but should not need to be changed -->
+        <entry key="ValidateConnection">
+<![CDATA[
+SELECT sysdate from dual
+]]>
+        </entry>
+
+        <!-- ***************** SCHEDULING *************************** -->
+        <!-- [CHANGE] String used to configure the scheduling of the extracts -->
+        <!-- Using Quartz: http://quartz-scheduler.org/documentation/quartz-2.1.x/examples/Example3 -->
+        <!-- Example below is daily monday to friday at 3am -->
+        <!-- <entry key="Schedule">0 0 3 ?  * MON,TUE,WED,THU,FRI</entry> -->
+        <!-- Every hour at xx:15 and xx:45 -->
+        <entry key="Schedule">0 0 3 ?  * MON,TUE,WED,THU,FRI</entry> 
+
+        <!-- ***************** ACCESS VALIDATION ******************** -->
+        <!-- [DO NOT CHANGE] The following script is used to validate access to the right set of tables. It's different for each SIS and there should not be any need to change it -->
+        <entry key="ValidateAccess">
+<![CDATA[
+DECLARE
+  v_aux number;
+BEGIN
+  BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE mccbonus';
+  EXCEPTION 
+    WHEN OTHERS THEN
+        NULL;
+  END;
+  EXECUTE IMMEDIATE 'CREATE TABLE mccbonus (id NUMBER, amt NUMBER)';
+  BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE sfish_st_transcript';
+    EXECUTE IMMEDIATE 'DROP TABLE sfish_course_section';
+    EXECUTE IMMEDIATE 'DROP TABLE sfish_faculty';
+    EXECUTE IMMEDIATE 'DROP TABLE sfish_users';
+    EXECUTE IMMEDIATE 'DROP TABLE sfish_terms';
+    EXECUTE IMMEDIATE 'DROP TABLE sf_spriden';
+    EXECUTE IMMEDIATE 'DROP TABLE sf_spbpers';
+    EXECUTE IMMEDIATE 'DROP TABLE sf_goremal';
+    EXECUTE IMMEDIATE 'DROP TABLE sf_gobtpac';
+    EXECUTE IMMEDIATE 'DROP TABLE sf_spraddr';
+    EXECUTE IMMEDIATE 'DROP TABLE sf_sprtele';
+  EXCEPTION 
+    WHEN OTHERS THEN
+        NULL;
+  END;
+    EXECUTE IMMEDIATE 'create global temporary table sfish_st_transcript(student_uid varchar(100), 
+                                                       section_uid varchar(100), 
+                                                       course_uid varchar(100), 
+                                                       term_id varchar(100), 
+                                                       att_cred int, 
+                                                       earn_cred int, 
+                                                       enrl_status int, 
+                                                       midterm_grd varchar(100), 
+                                                       final_grd varchar(100), 
+                                                       grd_basis varchar(100)) ON COMMIT PRESERVE ROWS';
+    EXECUTE IMMEDIATE 'create index sfish_st_transcript1 on sfish_st_transcript(student_uid)';
+    EXECUTE IMMEDIATE 'create index sfish_st_transcript2 on sfish_st_transcript(student_uid,section_uid,term_id)';
+    EXECUTE IMMEDIATE 'create global temporary table sfish_course_section(section_uid varchar(100),
+                                                           term_id varchar(100),
+                                                           subj_cde varchar(100),
+                                                           crse_no varchar(100),
+                                                           section_no varchar(100),
+                                                           section_name varchar(100),
+                                                           deliver_mthd varchar(100),
+                                                           start_dt date,
+                                                           end_dt date,
+                                                           crse_term_eff varchar(100)) ON COMMIT PRESERVE ROWS';
+    EXECUTE IMMEDIATE 'create index sfish_course_section1 on sfish_course_section(section_uid,term_id)';
+    EXECUTE IMMEDIATE 'create global temporary table sfish_faculty(section_uid varchar(100),
+                                                    term_id varchar(100),
+                                                    faculty_uid varchar(100),
+                                                    user_role varchar(100)) ON COMMIT PRESERVE ROWS';
+    EXECUTE IMMEDIATE 'create index sfish_faculty1 on sfish_faculty(faculty_uid)';
+    EXECUTE IMMEDIATE 'create index sfish_faculty2 on sfish_faculty(section_uid,term_id,faculty_uid)';
+    EXECUTE IMMEDIATE 'create global temporary table sfish_users(person_uid varchar(100),
+                                                  student number,
+                                                  faculty number,
+                                                  employee number) ON COMMIT PRESERVE ROWS';
+    EXECUTE IMMEDIATE 'create index sfish_users1 on sfish_users(person_uid)';
+    EXECUTE IMMEDIATE 'create global temporary table sfish_terms(term_id varchar(100),
+                                                  term_name varchar(100),
+                                                  start_date date,
+                                                  end_date date,
+                                                  display_start_date date,
+                                                  display_end_date date,
+                                                  add_drop_date date,
+                                                  term_type varchar(100),
+                                                  parent_term_id varchar(100),
+                                                  modified_ts date) ON COMMIT PRESERVE ROWS';
+     EXECUTE IMMEDIATE 'create global temporary table sf_spriden ( spriden_pidm number,
+                                                      spriden_last_name varchar(100),
+                                                      spriden_mi varchar(100),
+                                                      spriden_first_name varchar(100),
+                                                      spriden_id varchar(100),
+                                                      spriden_change_ind varchar(100)) ON COMMIT PRESERVE ROWS';
+     EXECUTE IMMEDIATE 'create index sf_spriden1 on sf_spriden(spriden_pidm)';
+     EXECUTE IMMEDIATE 'create global temporary table sf_spbpers ( spbpers_pidm number,
+                                                      spbpers_sex varchar(100),
+                                                      spbpers_vera_ind varchar(100),
+                                                      spbpers_citz_ind varchar(100),
+                                                      spbpers_citz_code varchar(100),
+                                                      spbpers_ethn_code varchar(100),
+                                                      spbpers_birth_date date) ON COMMIT PRESERVE ROWS';
+     EXECUTE IMMEDIATE 'create index sf_spbpers1 on sf_spbpers(spbpers_pidm)';
+
+     -- Need three entries per pidm
+     EXECUTE IMMEDIATE 'create global temporary table sf_sprtele (sprtele_pidm number, 
+                                                                  sprtele_tele_code varchar(100),
+                                                                  sprtele_phone_area varchar(100),
+                                                                  sprtele_phone_number varchar(100),
+                                                                  sprtele_phone_ext varchar(100)) ON COMMIT PRESERVE ROWS';
+     EXECUTE IMMEDIATE 'create index sf_sprtele1 on sf_sprtele(sprtele_pidm, sprtele_tele_code)';
+
+     EXECUTE IMMEDIATE 'create global temporary table sf_spraddr (spraddr_pidm number, 
+                                                                  spraddr_atyp_code varchar(100),
+                                                                  spraddr_street_line1 varchar(100),
+                                                                  spraddr_street_line2 varchar(100),
+                                                                  spraddr_city varchar(100),
+                                                                  spraddr_stat_code varchar(100),
+                                                                  spraddr_zip varchar(100),
+                                                                  spraddr_cnty_code varchar(100),
+                                                                  spraddr_natn_code varchar(100)) ON COMMIT PRESERVE ROWS';
+     EXECUTE IMMEDIATE 'create index sf_spraddr1 on sf_spraddr(spraddr_pidm, spraddr_atyp_code)';
+
+     EXECUTE IMMEDIATE 'create global temporary table sf_gobtpac (gobtpac_pidm number,
+                                                                  gobtpac_external_user varchar(100)) ON COMMIT PRESERVE ROWS';
+     EXECUTE IMMEDIATE 'create index sf_gobtpac1 on sf_gobtpac(gobtpac_pidm)';
+
+     EXECUTE IMMEDIATE 'create global temporary table sf_goremal (goremal_pidm number,
+                                                                  goremal_emal_code varchar(100),
+                                                                  goremal_email_address varchar(100)) ON COMMIT PRESERVE ROWS';
+     EXECUTE IMMEDIATE 'create index sf_goremal1 on sf_goremal(goremal_pidm, goremal_emal_code)';
+
+     -- EXECUTE IMMEDIATE 'create global temporary table sf_ ( 
+     --                                                      ) ON COMMIT PRESERVE ROWS';
+     -- EXECUTE IMMEDIATE 'create index sf_1 on sf_(_pidm)';
+
+  -- create global temporary table mcc(a number);
+  select count(*) into v_aux from ssrrtst;
+  select count(*) into v_aux from sfrstcr;
+  select count(*) into v_aux from spriden;
+  select count(*) into v_aux from sgbstdn;
+  select count(*) into v_aux from ssbsect;
+  select count(*) into v_aux from scrlevl;
+  select count(*) into v_aux from nbrbjob;
+  select count(*) into v_aux from sirasgn;
+  select count(*) into v_aux from spbpers;
+END;
+]]>
+        </entry>
+
+        <!-- ***************** TEMPORARY TABLES ******************** -->
+        <!-- [CONFIGURE] Use the configuration items for each temporary table in order to configure the creation of the temporary tables.    -->
+        <!--             The code can be edited based on your particular school requirements, but it's preferred to use configuration items  -->
+        <!-- rather than changing the actual queries                                                                                         -->
+        <!--             Configuration items are shown as {{parameter}} in the queries below, and are configured using an entry              -->
+        <!--             key named TEMPORARYTABLE.PARAMETER                                                                                  -->
+        <entry key="CreateTemporaryTables">sfish_st_transcript,sfish_course_section,sfish_faculty,sfish_users,sfish_terms</entry>
+
+
+        <entry key="sfish_st_transcript._registered">X</entry>
+        <entry key="sfish_st_transcript._dropped">X</entry>
+        <entry key="sfish_st_transcript._withdrawn">X</entry>
+        <entry key="sfish_st_transcript._incomplete">X</entry>
+        <entry key="sfish_st_transcript._deleted">X</entry>
+        <entry key="sfish_st_transcript.months_past">12</entry>
+        <entry key="sfish_st_transcript.months_future">3</entry>
+        <entry key="sfish_st_transcript._exclude_registration_status">X</entry>
+        <entry key="sfish_st_transcript._levels"></entry>
+        <entry key="sfish_st_transcript._exclude_levels">09</entry>
+        <entry key="sfish_st_transcript._emailtypes">CCSF,SL</entry>
+        <entry key="sfish_st_transcript.addresstype">PR</entry>
+        <entry key="sfish_st_transcript._phonetypes">SP,BU,SC</entry>
+        <entry key="sfish_st_transcript.all_history">NO</entry>
+        <entry key="CreateTemporary.sfish_st_transcript">
+<![CDATA[
+BEGIN
+        -- First pass with all academic history for the range selected
+        insert into sfish_st_transcript 
+                                  ( select a.shrtckn_pidm,
+                                           a.shrtckn_crn,
+                                           trim(a.shrtckn_subj_code) || '.' || trim(a.shrtckn_crse_numb),
+                                           -- replace(a.shrtckn_subj_code, ' ', '') || '-' || replace(a.shrtckn_crse_numb, ' ', ''),
+                                           a.shrtckn_term_code,
+                                           c.shrtckg_credit_hours,
+                                           0,
+                                           '1',
+                                           null,
+                                           c.shrtckg_grde_code_final,
+                                           c.shrtckg_gmod_code
+                                      from shrtckn a,
+                                           shrtckg c
+                                     where a.shrtckn_term_code IN (select stvterm_code
+                                                                     from stvterm
+                                                                    where stvterm_start_date BETWEEN sysdate-({{months_past}}*30)
+                                                                                                 AND sysdate+({{months_future}}*30)
+                                                                       or stvterm_end_date   BETWEEN sysdate-({{months_past}}*30) 
+                                                                                                 AND sysdate+({{months_future}}*30)) 
+                                       and shrtckn_term_code not like '%9'
+                                       and shrtckn_pidm = shrtckg_pidm
+                                       and shrtckn_term_code = shrtckg_term_code
+                                       and shrtckn_crn = shrtckn_crn
+                                       and shrtckg_tckn_seq_no = shrtckn_seq_no
+                                       and shrtckg_seq_no = ( select max(shrtckg_seq_no) from shrtckg 
+                                                               where shrtckn_pidm = shrtckg_pidm
+                                                               and shrtckn_term_code = shrtckg_term_code
+                                                               and shrtckn_crn = shrtckn_crn
+                                                               and shrtckg_tckn_seq_no = shrtckn_seq_no )
+                                 );
+
+        -- Second pass with all registrations for the range selected
+        insert into sfish_st_transcript
+                                  ( select b.spriden_pidm,
+                                           a.ssbsect_crn,
+                                           trim(a.ssbsect_subj_code) || '.' || trim(a.ssbsect_crse_numb),
+                                           -- replace(a.ssbsect_subj_code, ' ', '') || '-' || replace(a.ssbsect_crse_numb, ' ', ''),
+                                           a.ssbsect_term_code,
+                                           c.sfrstcr_credit_hr,
+                                           0,
+                                           CASE WHEN c.sfrstcr_rsts_code IN ({{_registered}}) THEN '1'
+                                                WHEN c.sfrstcr_rsts_code IN ({{_dropped}}) THEN '2'
+                                                WHEN c.sfrstcr_rsts_code IN ({{_withdrawn}}) THEN '3'
+                                                WHEN c.sfrstcr_rsts_code IN ({{_incomplete}}) THEN '5'
+                                                WHEN c.sfrstcr_rsts_code IN ({{_deleted}}) THEN '6'
+                                           ELSE '0'
+                                           END,
+                                           sfrstcr_grde_code_mid,
+                                           sfrstcr_grde_code,
+                                           sfrstcr_gmod_code
+                                      from ssbsect a,
+                                           spriden b,
+                                           sfrstcr c
+                                           --,sgbstdn d
+                                     where c.sfrstcr_term_code IN (select stvterm_code
+                                                                     from stvterm
+                                                                    where stvterm_start_date BETWEEN sysdate-({{months_past}}*30)
+                                                                                                 AND sysdate+({{months_future}}*30)
+                                                                       or stvterm_end_date   BETWEEN sysdate-({{months_past}}*30) 
+                                                                                                 AND sysdate+({{months_future}}*30)) 
+                                       and c.sfrstcr_term_code not like '%9'
+                                       and c.sfrstcr_rsts_code NOT IN ({{_exclude_registration_status}})
+                                       and c.sfrstcr_term_code = a.ssbsect_term_code
+                                       and c.sfrstcr_crn = a.ssbsect_crn
+                                       and a.ssbsect_ssts_code = 'A' -- Active section
+                                       and b.spriden_change_ind IS NULL
+                                       and c.sfrstcr_pidm = b.spriden_pidm
+                                       and not exists ( select 'Y' from sfish_st_transcript where student_uid = sfrstcr_pidm 
+                                                                                              and term_id = sfrstcr_term_code
+                                                                                              and section_uid = sfrstcr_crn )
+-- Exclude level 09
+/*
+                                       and c.sfrstcr_pidm = d.sgbstdn_pidm
+                                       and d.sgbstdn_pidm = b.spriden_pidm
+                                       and d.sgbstdn_term_code_eff = (select max(dd.sgbstdn_term_code_eff)
+                                                                        from sgbstdn dd
+                                                                       where dd.sgbstdn_pidm = d.sgbstdn_pidm
+                                                                         and dd.sgbstdn_term_code_eff <= c.sfrstcr_term_code)
+                                       and d.sgbstdn_levl_code in ({{_levels}})
+                                       and d.sgbstdn_levl_code not in ({{_exclude_levels}})
+                                       -- SFRSTCR_LEVL_CODE ?
+                                       and exists (select 1
+                                                     from scrlevl e
+                                                    where e.scrlevl_subj_code = a.ssbsect_subj_code
+                                                      and e.scrlevl_crse_numb = a.ssbsect_crse_numb
+                                                      and e.scrlevl_levl_code in ({{_levels}})
+                                                      and e.scrlevl_levl_code in ({{_exclude_levels}})
+                                                      and e.scrlevl_eff_term = (select max(ee.scrlevl_eff_term)
+                                                                                  from scrlevl ee
+                                                                                 where ee.scrlevl_subj_code = a.ssbsect_subj_code
+                                                                                   and ee.scrlevl_crse_numb = a.ssbsect_crse_numb
+                                                                                   and ee.scrlevl_eff_term <= a.ssbsect_term_code))
+*/
+                                       );
+
+        -- Third pass with all academic history for everyone already inserted
+        -- Only executed if all_history is set to YES, should be changed to NO after first full export
+        insert into sfish_st_transcript 
+                                  ( select a.shrtckn_pidm,
+                                           a.shrtckn_crn,
+                                           trim(a.shrtckn_subj_code) || '.' || trim(a.shrtckn_crse_numb),
+                                           -- replace(a.shrtckn_subj_code, ' ', '') || '-' || replace(a.shrtckn_crse_numb, ' ', ''),
+                                           a.shrtckn_term_code,
+                                           c.shrtckg_credit_hours,
+                                           0,
+                                           '1',
+                                           null,
+                                           c.shrtckg_grde_code_final,
+                                           c.shrtckg_gmod_code
+                                      from shrtckn a,
+                                           shrtckg c,
+                                           ( select distinct student_uid from sfish_st_transcript ) b
+                                     where '{{all_history}}' = 'YES' 
+                                       and shrtckn_term_code not like '%9'
+                                       and shrtckn_pidm = b.student_uid
+                                       and shrtckn_pidm = shrtckg_pidm
+                                       and shrtckn_term_code = shrtckg_term_code
+                                       and shrtckn_crn = shrtckn_crn
+                                       and shrtckg_tckn_seq_no = shrtckn_seq_no
+                                       and shrtckg_seq_no = ( select max(shrtckg_seq_no) from shrtckg 
+                                                               where shrtckn_pidm = shrtckg_pidm
+                                                               and shrtckn_term_code = shrtckg_term_code
+                                                               and shrtckn_crn = shrtckn_crn
+                                                               and shrtckg_tckn_seq_no = shrtckn_seq_no )
+                                       and not exists ( select 'Y' from sfish_st_transcript where student_uid = shrtckn_pidm 
+                                                                                              and term_id = shrtckn_term_code
+                                                                                              and section_uid = shrtckn_crn )
+                                 );
+
+/* moved to the users section, not students
+     -- Preparing temporary tables for other selections
+     insert into sf_spriden (spriden_pidm) ( select distinct student_uid from sfish_st_transcript );
+     update sf_spriden A set (spriden_last_name, spriden_first_name, spriden_mi, spriden_id, spriden_change_ind ) = 
+                     ( select spriden_last_name, spriden_first_name, spriden_mi, spriden_id, spriden_change_ind
+                         from spriden where spriden_pidm = A.spriden_pidm and spriden_change_ind is null );
+
+     insert into sf_spbpers (spbpers_pidm) ( select distinct student_uid from sfish_st_transcript );
+     update sf_spbpers A set (spbpers_sex, spbpers_birth_date, spbpers_vera_ind, spbpers_citz_ind ) = ( 
+                       select spbpers_sex, spbpers_birth_date, spbpers_vera_ind, spbpers_citz_ind  
+                         from spbpers where spbpers_pidm = A.spbpers_pidm );
+     
+     insert into sf_gobtpac (gobtpac_pidm) ( select distinct student_uid from sfish_st_transcript );
+     update sf_gobtpac A set (gobtpac_external_user) = ( select gobtpac_external_user from gobtpac where gobtpac_pidm = A.gobtpac_pidm );
+
+     insert into sf_goremal (goremal_pidm, goremal_emal_code) ( select distinct student_uid, gtvemal_code from sfish_st_transcript, gtvemal where gtvemal_code in ({{_emailtypes}}) );
+     update sf_goremal A set (goremal_email_address) = ( select goremal_email_address from goremal where goremal_pidm = A.goremal_pidm and goremal_emal_code = A.goremal_emal_code and goremal_status_ind = 'A' and rownum = 1);
+
+     insert into sf_spraddr (spraddr_pidm, spraddr_atyp_code) ( select distinct student_uid, '{{addresstype}}' from sfish_st_transcript );
+     update sf_spraddr A set ( spraddr_street_line1, spraddr_street_line2, spraddr_city, spraddr_stat_code, spraddr_zip, spraddr_cnty_code, spraddr_natn_code) = ( 
+                        select spraddr_street_line1, spraddr_street_line2, spraddr_city, spraddr_stat_code, spraddr_zip, spraddr_cnty_code, spraddr_natn_code
+                          from spraddr where spraddr_pidm = A.spraddr_pidm 
+                                         and spraddr_atyp_code = A.spraddr_atyp_code 
+                                         and spraddr_status_ind is null 
+                                         and sysdate between nvl(spraddr_from_date,sysdate) 
+                                         and nvl(spraddr_to_date, sysdate) 
+                                         and rownum = 1);
+
+     insert into sf_sprtele (sprtele_pidm, sprtele_tele_code) ( select distinct student_uid, stvtele_code from sfish_st_transcript, stvtele where stvtele_code in ({{_phonetypes}}) );
+     update sf_sprtele A set ( sprtele_phone_area, sprtele_phone_number, sprtele_phone_ext) = (
+                        select replace(translate(sprtele_phone_area, '()-+. ','     '), ' ',''),
+                               replace(translate(sprtele_phone_number, '()-+. ','     '),' ',''),
+                               replace(translate(sprtele_phone_ext, '()-+. ','     '), ' ','')
+                          from sprtele where sprtele_pidm = A.sprtele_pidm 
+                                         and sprtele_tele_code = A.sprtele_tele_code 
+                                         and sprtele_status_ind is null 
+                                         and rownum = 1);
+-- END of move 
+*/
+
+     commit;
+END;
+]]>
+        </entry>
+
+
+        <entry key="CreateTemporary.sfish_course_section">
+<![CDATA[
+BEGIN
+        insert into sfish_course_section
+                                  ( select a.ssbsect_crn,
+                                           a.ssbsect_term_code,
+                                           b.scbcrse_subj_code,
+                                           a.ssbsect_crse_numb,
+                                           a.ssbsect_seq_numb,
+                                           nvl(a.ssbsect_crse_title, b.scbcrse_title),
+                                           null, --course_section_delivery (Placeholder)
+                                           a.ssbsect_ptrm_start_date,
+                                           a.ssbsect_ptrm_end_date,
+                                           b.scbcrse_eff_term
+                                      from ssbsect a,
+                                           scbcrse b,
+                                           ( select distinct section_uid, term_id from sfish_st_transcript ) c
+                                     where a.ssbsect_crn = c.section_uid
+                                       and a.ssbsect_term_code not like '%9'
+                                       and a.ssbsect_term_code = c.term_id
+                                       and a.ssbsect_subj_code = b.scbcrse_subj_code
+                                       and a.ssbsect_crse_numb = b.scbcrse_crse_numb
+                                       and b.scbcrse_eff_term = (select max(bb.scbcrse_eff_term)
+                                                                   from scbcrse bb
+                                                                  where bb.scbcrse_subj_code = a.ssbsect_subj_code
+                                                                    and bb.scbcrse_crse_numb = a.ssbsect_crse_numb
+                                                                    and bb.scbcrse_eff_term <= a.ssbsect_term_code));
+     commit;
+END;
+]]>
+        </entry>
+
+        <entry key="CreateTemporary.sfish_faculty">
+<![CDATA[
+BEGIN
+        insert into sfish_faculty
+                                  ( select a.ssbsect_crn,
+                                           a.ssbsect_term_code,
+                                           b.sirasgn_pidm,
+                                           'Instructor'
+                                      from ssbsect a,
+                                           sirasgn b,
+                                           ( select distinct section_uid, term_id from sfish_st_transcript ) c
+                                     where a.ssbsect_crn = c.section_uid
+                                       and a.ssbsect_term_code not like '%9'
+                                       and a.ssbsect_term_code = c.term_id
+                                       and a.ssbsect_crn = b.sirasgn_crn
+                                       and a.ssbsect_term_code = b.sirasgn_term_code );
+     commit;
+END;
+]]>
+        </entry>
+  
+        <entry key="sfish_users._emailtypes">CCSF,SL</entry>
+        <entry key="sfish_users.addresstype">PR</entry>
+        <entry key="sfish_users._phonetypes">SP,BU,SC</entry>
+        <entry key="CreateTemporary.sfish_users">
+<![CDATA[
+BEGIN
+        insert into sfish_users ( 
+                               ( select person_uid, max(student), max(faculty), max(employee) 
+                                   from ( select distinct student_uid person_uid, 1 student, 0 faculty, 0 employee from sfish_st_transcript
+                                          union
+                                          select distinct faculty_uid person_uid, 0, 1, 0 from sfish_faculty
+                                          union
+                                          select distinct to_char(sibinst_pidm) person_uid, 0, 0, 1 from sibinst where sibinst_advr_ind = 'Y' 
+                                          -- union
+                                          -- select distinct nbrbjob_pidm person_uid, 0, 0, 1  
+                                          --   from nbrbjob
+                                          --  where sysdate between nbrbjob_begin_date and nvl(nbrbjob_end_date, sysdate+1)
+                                        )
+                                  group by person_uid ));
+
+     -- Preparing temporary tables for other selections
+     -- insert into sf_spriden (spriden_pidm) ( select distinct student_uid from sfish_st_transcript );
+     insert into sf_spriden (spriden_pidm) ( select distinct person_uid student_uid from sfish_users );
+     update sf_spriden A set (spriden_last_name, spriden_first_name, spriden_mi, spriden_id, spriden_change_ind ) = 
+                     ( select spriden_last_name, spriden_first_name, spriden_mi, spriden_id, spriden_change_ind
+                         from spriden where spriden_pidm = A.spriden_pidm and spriden_change_ind is null );
+
+     -- insert into sf_spbpers (spbpers_pidm) ( select distinct student_uid from sfish_st_transcript );
+     insert into sf_spbpers (spbpers_pidm) ( select distinct person_uid student_uid from sfish_users );
+     update sf_spbpers A set (spbpers_sex, spbpers_birth_date, spbpers_vera_ind, spbpers_citz_ind, spbpers_citz_code, spbpers_ethn_code ) = ( 
+                       select spbpers_sex, spbpers_birth_date, spbpers_vera_ind, spbpers_citz_ind, spbpers_citz_code, spbpers_ethn_code  
+                         from spbpers where spbpers_pidm = A.spbpers_pidm );
+     
+     -- insert into sf_gobtpac (gobtpac_pidm) ( select distinct student_uid from sfish_st_transcript );
+     insert into sf_gobtpac (gobtpac_pidm) ( select distinct person_uid student_uid from sfish_users );
+     update sf_gobtpac A set (gobtpac_external_user) = ( select gobtpac_external_user from gobtpac where gobtpac_pidm = A.gobtpac_pidm );
+
+     -- insert into sf_goremal (goremal_pidm, goremal_emal_code) ( select distinct student_uid, gtvemal_code from sfish_st_transcript, gtvemal where gtvemal_code in ({{_emailtypes}}) );
+     insert into sf_goremal (goremal_pidm, goremal_emal_code) ( select distinct person_uid student_uid, gtvemal_code from sfish_users, gtvemal where gtvemal_code in ({{_emailtypes}}) );
+     update sf_goremal A set (goremal_email_address) = ( select goremal_email_address from goremal where goremal_pidm = A.goremal_pidm and goremal_emal_code = A.goremal_emal_code and goremal_status_ind = 'A' and rownum = 1);
+
+     -- insert into sf_spraddr (spraddr_pidm, spraddr_atyp_code) ( select distinct student_uid, '{{addresstype}}' from sfish_st_transcript );
+     insert into sf_spraddr (spraddr_pidm, spraddr_atyp_code) ( select distinct person_uid student_uid, '{{addresstype}}' from sfish_users );
+     update sf_spraddr A set ( spraddr_street_line1, spraddr_street_line2, spraddr_city, spraddr_stat_code, spraddr_zip, spraddr_cnty_code, spraddr_natn_code) = ( 
+                        select spraddr_street_line1, spraddr_street_line2, spraddr_city, spraddr_stat_code, spraddr_zip, spraddr_cnty_code, spraddr_natn_code
+                          from spraddr where spraddr_pidm = A.spraddr_pidm 
+                                         and spraddr_atyp_code = A.spraddr_atyp_code 
+                                         and spraddr_status_ind is null 
+                                         and sysdate between nvl(spraddr_from_date,sysdate) 
+                                         and nvl(spraddr_to_date, sysdate) 
+                                         and rownum = 1);
+
+     -- insert into sf_sprtele (sprtele_pidm, sprtele_tele_code) ( select distinct student_uid, stvtele_code from sfish_st_transcript, stvtele where stvtele_code in ({{_phonetypes}}) );
+     insert into sf_sprtele (sprtele_pidm, sprtele_tele_code) ( select distinct person_uid student_uid, stvtele_code from sfish_users, stvtele where stvtele_code in ({{_phonetypes}}) );
+     update sf_sprtele A set ( sprtele_phone_area, sprtele_phone_number, sprtele_phone_ext) = (
+                        select replace(translate(sprtele_phone_area, '()-+. ','     '), ' ',''),
+                               replace(translate(sprtele_phone_number, '()-+. ','     '),' ',''),
+                               replace(translate(sprtele_phone_ext, '()-+. ','     '), ' ','')
+                          from sprtele where sprtele_pidm = A.sprtele_pidm 
+                                         and sprtele_tele_code = A.sprtele_tele_code 
+                                         and sprtele_status_ind is null 
+                                         and rownum = 1);
+     commit;
+END;
+]]>
+        </entry>
+ 
+
+        <!-- make 6 weeks -->
+        <entry key="sfish_terms.display_start">42</entry>
+        <entry key="sfish_terms.display_end">42</entry>
+        <!-- Not being used as of now -->
+        <entry key="sfish_terms._parts_of_term">01,02,FU</entry>
+        <!-- Limiting terms -->
+        <entry key="sfish_terms._registration_codes">DC,RW</entry>
+        <entry key="sfish_terms.initial_date">01/01/1900</entry>
+        <entry key="sfish_terms.end_date">01/01/2999</entry>
+        <entry key="sfish_terms.months_past">48</entry>
+        <entry key="sfish_terms.months_future">6</entry>
+        <entry key="sfish_terms._list_of_terms"></entry>
+        <entry key="CreateTemporary.sfish_terms">
+<![CDATA[
+BEGIN
+        insert into sfish_terms (
+    SELECT a.stvterm_code,
+           a.stvterm_desc,
+           a.stvterm_start_date,
+           a.stvterm_end_date,
+           a.stvterm_start_date-{{display_start}},
+           a.stvterm_end_date+{{display_end}},
+           (SELECT min(sfrrsts_start_date)-1
+              FROM sfrrsts
+             WHERE sfrrsts_term_code = a.stvterm_code
+               -- AND sfrrsts_ptrm_code IN ({{_parts_of_term}})
+               -- AND sfrrsts_rsts_code IN ({{_registration_codes}})
+           ),
+           '01',
+           a.stvterm_fa_proc_yr,
+           a.stvterm_activity_date
+      FROM stvterm a
+     WHERE ( a.stvterm_start_date >= least(to_date('{{initial_date}}','MM/DD/YYYY'), add_months(sysdate, -{{months_past}}))
+         AND a.stvterm_end_date <= greatest(to_date('{{end_date}}','MM/DD/YYYY'), add_months(sysdate, {{months_future}})))
+        -- OR ( a.stvterm_code IN ({{_list_of_terms}}))
+         AND ( a.stvterm_code not like '%9' )
+     );
+     commit;
+END;
+]]>
+        </entry>
+
+        <!-- ***************** FILES TO GENERATE ******************** -->
+        <!-- <entry key="NewLine">\n</entry> -->
+        <entry key="Files">course_catalog,enrollments,outcomes,sections,teaching,users,academic_calendar,demographics,admissions,student_program,program_catalog,student_term,financial_aid,organizations,orgmembership,relationships,attributes,prerequisites,corequisites,attendance,scores,requirement_course_sets</entry>
+
+        <!-- [CHANGE] Location where the files will be created -->
+        <entry key="ExtractLocation">starfish_extracts</entry>
+        <entry key="TempExtractLocation">starfish_extracts_temp</entry>
+        <entry key="AdapterConfig">datapump-common/config.xml</entry> 
+        <entry key="Validate">datapump-common;validate.sh</entry>
+
+        <!-- [CHANGE] For each file if it needs to be generated or skipped -->
+        <entry key="course_catalog.generate">0</entry>
+        <entry key="enrollments.generate">0</entry>
+        <entry key="sections.generate">0</entry>
+        <entry key="outcomes.generate">0</entry>
+        <entry key="teaching.generate">0</entry>
+        <!-- Still missing some fields -->
+        <entry key="users.generate">0</entry>
+        <entry key="academic_calendar.generate">0</entry>
+        <!-- stop here for basic set of files -->
+        <!-- Two attributes to start -->
+        <entry key="attributes.generate">0</entry>
+        <!-- Missing one organization still GuardianScholars -->
+        <entry key="organizations.generate">0</entry>
+        <entry key="orgmembership.generate">0</entry>
+        <entry key="prerequisites.generate">0</entry>
+        <entry key="corequisites.generate">0</entry>
+        <entry key="demographics.generate">0</entry>
+        <entry key="requirement_course_sets.generate">1</entry>
+
+        <!-- Pending Banner implementation -->
+        <entry key="relationships.generate">0</entry>
+        <entry key="program_catalog.generate">0</entry>
+        <entry key="admissions.generate">0</entry>
+        <entry key="student_program.generate">0</entry>
+        <entry key="student_term.generate">0</entry>
+        <entry key="financial_aid.generate">0</entry>
+        <entry key="scores.generate">0</entry>
+        <entry key="attendance.generate">0</entry>
+       
+
+        <!-- HOWTO: For each file
+             - Name to generate
+             - Term based or one file for all terms 
+             - Fields
+             - Override script [NOT IMPLEMENTED]
+             - Variables for the query 
+             - Query (called 'template')
+        -->
+
+        <!-- ***************** CONFIGURATION: ENROLLMENTS  ******************** -->
+        <entry key="enrollments.filename">Enrollment.txt</entry>
+        <entry key="enrollments.term_based">1</entry>
+        <entry key="enrollments.distinct_terms">select distinct term_id from sfish_st_transcript</entry>
+        <entry key="enrollments.current_term"></entry>
+        <entry key="enrollments.fields">course_section_integration_id,user_integration_id,user_role,available_ind,credit_hours,last_access_date,authoritative_status,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="enrollments.override">@enrollment.sql</entry>
+        <entry key="enrollments.extra">--Enter extra logic here</entry>
+        <entry key="enrollments.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="enrollments.template">
+<![CDATA[
+select section_uid || '.' || term_id course_section_integration_id,
+       student_uid user_integration_id,
+       'Student' user_role,
+       '1' available_ind, 
+       att_cred credit_hours, -- or we could use isnull(earn_cred, att_cred) 
+       null last_access_date, -- Last time the student accessed the course online, is this in CAMS?
+       enrl_status authoritative_status,
+       null modified_ts  
+  from sfish_st_transcript {{extra_tables}} 
+ where ( {{term_based}} = 0 or to_char(term_id) = '{{current_term}}' )
+   {{extra}} 
+   order by 1,2
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: OUTCOMES  ******************** -->
+        <entry key="outcomes.filename">Course_outcomes.txt</entry>
+        <entry key="outcomes.term_based">1</entry>
+        <entry key="outcomes.distinct_terms">select distinct term_id from sfish_st_transcript</entry>
+        <entry key="outcomes.current_term"></entry>
+        <entry key="outcomes.fields">user_integration_id,course_section_integration_id,midterm_grade,final_grade,credit_hours,enrollment_type,pass_fail,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="outcomes.override">@outcomes.sql</entry>
+        <entry key="outcomes.extra">--Enter extra logic here</entry>
+        <entry key="outcomes.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="outcomes._letter">X</entry>
+        <entry key="outcomes._audit">X</entry>
+        <entry key="outcomes._passfail">X</entry>
+        <entry key="outcomes._pass">X</entry>
+        <entry key="outcomes._fail">X</entry>
+        <entry key="outcomes.template">
+<![CDATA[
+select student_uid user_integration_id,
+       section_uid || '.' || term_id course_section_integration_id,
+       midterm_grd midterm_grade,
+       final_grd final_grade,
+       earn_cred credit_hours,
+       /* TODO: Put in summary: shrtckg_gmod_code */
+       CASE WHEN grd_basis in ( {{_letter}} ) THEN 'L'
+            WHEN grd_basis in ( {{_audit}} ) THEN 'AU'
+            WHEN grd_basis in ( {{_passfail}} ) THEN 'PF'
+            ELSE null 
+       END enrollment_type,
+       CASE WHEN final_grd in ( {{_pass}} ) THEN 'P'
+            WHEN final_grd in ( {{_fail}} ) THEN 'F'
+            ELSE null 
+       END pass_fail,
+       null modified_ts 
+  from sfish_st_transcript {{extra_tables}} 
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+   and ( final_grd is not null or midterm_grd is not null )
+   {{extra}}
+ order by 1,2
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: SECTIONS  ******************** -->
+        <entry key="sections.filename">Sections.txt</entry>
+        <entry key="sections.term_based">1</entry>
+        <entry key="sections.distinct_terms">select distinct term_id from sfish_course_section</entry>
+        <entry key="sections.current_term"></entry>
+        <entry key="sections.fields">integration_id,course_section_name,course_section_id,start_dt,end_dt,term_id,course_integration_id,course_section_delivery,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="sections.override">@sections.sql</entry>
+        <entry key="sections.extra">--Enter extra logic here</entry>
+        <entry key="sections.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="sections.template">
+<![CDATA[
+select section_uid || '.' || term_id integration_id,
+       trim(section_name) course_section_name,
+       trim(subj_cde) || '.' || trim(crse_no) || '.' || trim(section_no) course_section_id,
+       to_char(start_dt, 'yyyy-MM-dd') start_dt,
+       to_char(end_dt, 'yyyy-MM-dd') end_dt,
+       term_id term_id,
+       trim(subj_cde) || '.' || trim(crse_no) || '.' || crse_term_eff course_integration_id, 
+       deliver_mthd course_section_delivery, 
+       --null maximum_enrollment_count,
+       --null credit_hours,
+       --null registration_call_number,
+       null modified_ts
+  from sfish_course_section {{extra_tables}}
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+    {{extra}}
+ order by 1
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: TEACHING  ******************** -->
+        <entry key="teaching.filename">Teaching.txt</entry>
+        <entry key="teaching.term_based">1</entry>
+        <entry key="teaching.distinct_terms">select distinct term_id from sfish_faculty</entry>
+        <entry key="teaching.current_term"></entry>
+        <entry key="teaching.fields">course_section_integration_id,user_integration_id,user_role,available_ind,last_access_date,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="teaching.override">@teaching.sql</entry>
+        <entry key="teaching.extra">--Enter extra logic here</entry>
+        <entry key="teaching.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="teaching.template">
+<![CDATA[
+select section_uid || '.' || term_id course_section_integration_id,
+       faculty_uid user_integration_id,
+       user_role user_role,
+       '1' available_ind,
+       null last_access_date, -- where to get it?
+       null modified_ts 
+  from sfish_faculty {{extra_tables}}
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+    {{extra}}
+ order by 1,2
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: USERS  ******************** -->
+        <entry key="users.filename">Users.txt</entry>
+        <entry key="users.term_based">0</entry>
+        <entry key="users.fields">integration_id,family_name,middle_name,given_name,email,secondary_email,student_id,user_id,gender,birth_dt,company,job_title,h_phone,b_phone,m_phone,available_ind,assign_student_role,allow_login,home_city,home_state,home_zip,home_county</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="users.override">@users.sql</entry>
+        <entry key="users.extra">--Enter extra logic here</entry>
+        <entry key="users.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="users.template">
+<![CDATA[
+select a.spriden_pidm integration_id,
+       a.spriden_last_name family_name,
+       a.spriden_mi middle_name,
+       a.spriden_first_name given_name,
+       e1.goremal_email_address email,
+       e2.goremal_email_address secondary_email,
+       a.spriden_id student_id,
+       u.gobtpac_external_user user_id,
+       CASE WHEN b.spbpers_sex IN ('M','F') THEN b.spbpers_sex
+            ELSE 'U'
+       END gender,
+       to_char(b.spbpers_birth_date, 'yyyy-MM-dd') birth_dt,
+       '' company,
+       -- ADD to summary!!
+       CASE WHEN faculty = 1 THEN '' -- from sibfacd if not from nbbposn
+            WHEN employee = 1 THEN '' -- from  nbbposn_title
+       END job_title,
+       CASE WHEN faculty = 1 OR employee = 1 THEN t1.sprtele_phone_area || t1.sprtele_phone_number
+            WHEN student = 1  THEN t1.sprtele_phone_area || t1.sprtele_phone_number
+            ELSE ''
+       END h_phone,
+       t2.sprtele_phone_area || t2.sprtele_phone_number b_phone,
+       t3.sprtele_phone_area || t3.sprtele_phone_number m_phone,
+       '' available_ind, -- from summary???
+       '' assign_student_role, -- from summary!!!
+       '' allow_login,
+       ad.spraddr_city home_city,
+       ad.spraddr_stat_code home_state,
+       ad.spraddr_zip home_zip,
+       ad.spraddr_cnty_code home_county,
+       null modified_ts
+  from sfish_users c 
+       join sf_spriden a on ( c.person_uid = a.spriden_pidm and a.spriden_change_ind is null )
+       join sf_spbpers b on ( c.person_uid = b.spbpers_pidm )
+       left join sf_goremal e1 on ( c.person_uid = e1.goremal_pidm and e1.goremal_emal_code = 'CCSF' )
+       left join sf_goremal e2 on ( c.person_uid = e2.goremal_pidm and e2.goremal_emal_code = 'SL' )
+       join sf_gobtpac u on ( c.person_uid = u.gobtpac_pidm )
+       left join sf_spraddr ad on ( c.person_uid = ad.spraddr_pidm and ad.spraddr_atyp_code = 'PR' )
+       left join sf_sprtele t1 on ( c.person_uid = t1.sprtele_pidm and t1.sprtele_tele_code = 'SP' )
+       left join sf_sprtele t2 on ( c.person_uid = t2.sprtele_pidm and t2.sprtele_tele_code = 'BU' )
+       left join sf_sprtele t3 on ( c.person_uid = t3.sprtele_pidm and t3.sprtele_tele_code = 'SC' )
+       {{extra_tables}}
+ where spriden_first_name is not null 
+   and spriden_last_name is not null
+    {{extra}}
+ order by 1
+]]>
+        </entry>
+
+
+        <!-- ***************** CONFIGURATION: ACADEMIC CALENDAR  ******************** -->
+        <entry key="academic_calendar.filename">Academic_calendar.txt</entry>
+        <entry key="academic_calendar.term_based">0</entry>
+        <entry key="academic_calendar.fields">term_id,term_name,start_date,end_date,display_start_date,display_end_date,add_drop_date,term_type,parent_term_id,census_date,prereg_start_date,prereg_end_date,reg_start_date,reg_end_date,persistence_relevant,visible,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="academic_calendar.override">@academic_calendar.sql</entry>
+        <entry key="academic_calendar.extra">--Enter extra logic here</entry>
+        <entry key="academic_calendar.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="academic_calendar.template">
+<![CDATA[
+select term_id,
+       term_name,
+       to_char(start_date, 'yyyy-MM-dd') start_date,
+       to_char(end_date, 'yyyy-MM-dd') end_date,
+       to_char(display_start_date, 'yyyy-MM-dd') display_start_date,
+       to_char(display_end_date, 'yyyy-MM-dd') display_end_date,
+       to_char(add_drop_date, 'yyyy-MM-dd') add_drop_date,
+/*
+	01 – to indicate a full term (i.e., semester, quarter or trimester)
+	02 – to indicate an academic year
+	03 – to indicate a session
+*/
+       null term_type,
+       null parent_term_id,
+       null census_date,
+       null prereg_start_date,
+       null prereg_end_date,
+       null reg_start_date,
+       null reg_end_date,
+       /* 
+       to_char(census_date, 'yyyy-MM-dd') census_date,
+       to_char(prereg_start_date, 'yyyy-MM-dd') prereg_start_date,
+       to_char(prereg_end_date, 'yyyy-MM-dd') prereg_end_date,
+       to_char(reg_start_date, 'yyyy-MM-dd') reg_start_date,
+       to_char(reg_end_date, 'yyyy-MM-dd') reg_end_date,
+       */
+       null persistence_relevant,
+       'Y' visible,
+       null modified_ts
+  from sfish_terms a
+       {{extra_tables}}
+    {{extra}}
+ order by 1
+]]>
+        </entry>
+
+       
+        <!-- ***************** CONFIGURATION: ATTRIBUTES  ******************** -->
+        <!--
+        Original List:
+        Probation Status			Cum G.P.A.		
+        Special Populations			Matriculation Steps Completed		
+        Financial Aid Status			Credits Units					
+        Non-Credit Units			Incoming Transcript				
+        Residency Status			Math/English/ESL Placement*		
+        Ed. Plan Completed			International Student				
+        Campus Location	
+        Proposed List (first 10 from their list)
+-   Student Probation Status * (Marc actually already did this one)
+-          Cumulative GPA * (Marc actually already did this one)
+-          Special Pops:
+             -   AB540 status (Boolean) *
+             -   Concurrent Enrollment (Boolean) *
+             -   Concurrent Enrollment –Non-Resident (Boolean) *
+             -   DSPS (Boolean) * ((Note: I am going to make this one hidden and we are going to create a cohort for this that is only visible to DSPS Staff)
+             -   EOPS (Boolean) *
+             -   Gateway to College (Boolean) *
+             -   Veteran (Boolean) *
+-          Credit Hours (Units Completed) *
+- 
+-
+-  LIST on 11.18.15
+1.       Placement Scores – SOATEST (Four separate attributes)
+  a.        Key: ENGL_PLACE
+  b.        Key: MATH_PLACE
+  c.        Key: CHEM_PLACE
+  d.        Key: ESL_PLACE
+2.       Orientation Completion – SEADETL
+  a.        Key: ORIENT_COMPLETE
+  b.        Value should be a date
+3.       HOLD OFF: Counseling Component – SEADETL Hold off on this one for now
+  a.        Key: COUNS_COMPONENT
+  b.        Value should be a date
+4.       Comprehensive Ed. Plan Completion - SEADETL
+  a.        Key: EDPLAN_COMPLETE
+  b.        Value should be a date
+5.       Credit Hours (Units Completed) – SHATERM
+  a.        Key: UNITS_COMPLETE
+  b.        Value should be degree and non degree applicable local units completed
+6.       Program of Study/Educational Goal – SGBSTDN_PROGRAM
+  a.        Key: PROGRAM_STUDY
+  b.        Value should be program name (there is only one per student)
+ 
+Hold off on creating these for now:
+-          Non Credit Hours completed
+-          Outside transcripts (Almost impossible since this is scanned in, not data)
+-          Attempted Units
+-          Residency
+Counseling Component added to the “Hold off” list
+ 
+Attributes Already Done:
+-          CUM GPA
+-          Probation Status
+        -->
+        <entry key="attributes.filename">Attributes.txt</entry>
+        <entry key="attributes.term_based">0</entry>
+        <entry key="attributes.fields">user_integration_id,attribute_key,attribute_value,modified_ts</entry>
+        <entry key="attributes.class">com.starfish.sisintegration.AttributesFileGenerator</entry>
+        <!-- [CHANGE] Add the attributes your institution will need, and add a section for the query of each of those attributes -->
+        <!-- <entry key="attributes.list">PROBATIONSTATUS,CUMGPA,EOPS,VETERAN,DSPS</entry> -->
+        <!-- <entry key="attributes.list">PROBATIONSTATUS,CUMGPA,EOPS,DSPS,PLACEMENT,ORIENTATION,COUNSELING,COMPEDCOMPLETED,CREDITHOURS,NONCREDITHOURS,OUTSIDETRANS,EGOL,ATTEMPTEDUNITS,RESIDENCY</entry> -->
+        <!-- removed EOPS and DSPS, but implemented -->
+        <!-- 20151123 hold on UNITS_COMPLETE, COMPEDCOMPLETED and ORIENTATION since we don't know the logic yet -->
+        <!-- <entry key="attributes.list">PROBATIONSTATUS,CUMGPA,PLACEMENT,ORIENTATION,COMPEDCOMPLETED,UNITS_COMPLETE,PROGRAM_STUDY</entry> -->
+        <entry key="attributes.list">PROBATIONSTATUS,CUMGPA,PLACEMENT,PROGRAM_STUDY</entry>
+        <entry key="attributes.list.unions"></entry>
+       
+        <!-- TODO, override still not implemented -->
+        <entry key="attributes.override">@attributes.sql</entry>
+        <entry key="attributes.extra">--Enter extra logic here</entry>
+        <entry key="attributes.extra_tables">--Enter extra tables for the join</entry>
+        <!-- [DO NOT CHANGE] The main query for the attributes file. Change each of the individual queries for the attributes -->
+        <entry key="attributes.template">
+<![CDATA[
+with stu_users as (
+  select distinct student_uid, term_id
+    from ( select student_uid, max(term_id) term_id from sfish_st_transcript group by student_uid )
+) 
+{{list.unions}}
+order by 1,2
+]]>
+        </entry>
+
+<!-- [CHANGE] Change the attributes -->
+        <entry key="attributes.PROBATIONSTATUS.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'PROBATIONSTATUS' attribute_key,
+       svvprst_desc attribute_value,
+       null modified_ts
+  from svrprgs a, svvprst, stu_users
+ where svrprgs_pidm = student_uid
+   and svrprgs_term_code = ( select max(svrprgs_term_code) from svrprgs 
+                              where svrprgs_pidm = a.svrprgs_pidm )
+   and svrprgs_seq_no = ( select max(svrprgs_seq_no) from svrprgs 
+                              where svrprgs_pidm = a.svrprgs_pidm 
+                                and svrprgs_term_code = a.svrprgs_term_code )
+   and svrprgs_prst_code = svvprst_code                             
+]]>
+        </entry>
+
+        <entry key="attributes.CUMGPA.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'CUMGPA' attribute_key,
+       to_char(round(shrlgpa_gpa,2)) attribute_value,
+       null modified_ts
+  from stu_users, shrlgpa, sgbstdn a
+ where shrlgpa_pidm = student_uid
+   and shrlgpa_gpa_type_ind = 'O'
+   and shrlgpa_levl_code = sgbstdn_levl_code
+   and sgbstdn_pidm = shrlgpa_pidm
+   and shrlgpa_gpa > 0
+   and sgbstdn_term_code_eff = ( select max(sgbstdn_term_code_eff) 
+                                   from sgbstdn 
+                                  where sgbstdn_pidm = a.sgbstdn_pidm 
+                                    and sgbstdn_term_code_eff <= term_id )
+]]>
+        </entry>
+
+        <entry key="attributes.UNITS_COMPLETE.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'UNITS_COMPLETE' attribute_key,
+       to_char(round(shrlgpa_hours_earned,2)) attribute_value,
+       null modified_ts
+  from stu_users, shrlgpa, sgbstdn a
+ where shrlgpa_pidm = student_uid
+   and shrlgpa_gpa_type_ind = 'I'
+   and shrlgpa_levl_code = sgbstdn_levl_code
+   and sgbstdn_pidm = shrlgpa_pidm
+   and shrlgpa_gpa > 0
+   and sgbstdn_term_code_eff = ( select max(sgbstdn_term_code_eff) 
+                                   from sgbstdn 
+                                  where sgbstdn_pidm = a.sgbstdn_pidm 
+                                    and sgbstdn_term_code_eff <= term_id )
+]]>
+        </entry>
+
+        <entry key="attributes.EOPS.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'EOPS' attribute_key,
+       sgbeops_term_code_eff attribute_value,
+       null modified_ts
+  from stu_users, sgbeops a
+ where a.sgbeops_pidm = student_uid
+   and a.sgbeops_term_code_eff = ( select max(sgbeops_term_code_eff) from sgbeops
+                                    where sgbeops_pidm = stu_users.student_uid
+                                      and sgbeops_term_code_eff <= term_id )
+]]>
+        </entry>
+
+        <entry key="attributes._disa_exclude">DY,DN,NA,N</entry>
+        <entry key="attributes.DSPS.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'DSPS' attribute_key,
+       sgrdisa_term_code attribute_value,
+       null modified_ts
+  from stu_users, sgrdisa
+ where sgrdisa_pidm = student_uid
+   and sgrdisa_term_code = ( select max(sgrdisa_term_code) from sgrdisa
+                              where sgrdisa_pidm = student_uid
+                                and sgrdisa_term_code <= term_id )
+   and sgrdisa_disa_code not in ({{_disa_exclude}})
+]]>
+        </entry>
+
+<!--
+        <entry key="attributes.VETERAN.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'VETERAN' attribute_key,
+       'NA' attribute_value,
+       null modified_ts
+  from stu_users 
+]]>
+        </entry>
+-->
+
+<!-- TODO NEW ATTRIBUTES -->
+        <entry key="attributes.PLACEMENT.template">
+<![CDATA[
+select student_uid user_integration_id,
+       decode(sortest_tesc_code, 'MATH', 'MATH_PLACE',
+                                 'ENGP', 'ENGL_PLACE',
+                                 'CHMP', 'CHEM_PLACE',
+                                 'ESLP', 'ESL_PLACE') attribute_key,
+       max(sortest_test_score) attribute_value,
+       null modified_ts
+  from sortest, stu_users
+ where sortest_tesc_code in ('MATH','ENGP','CHMP','ESLP')
+   and sortest_pidm = student_uid
+ group by student_uid,        
+          decode(sortest_tesc_code, 'MATH', 'MATH_PLACE',
+                                    'ENGP', 'ENGL_PLACE',
+                                    'CHMP', 'CHEM_PLACE',
+                                    'ESLP', 'ESL_PLACE')
+]]>
+        </entry>
+
+        <entry key="attributes.ORIENTATION.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'ORIENTATION' attribute_key,
+       'NA' attribute_value,
+       null modified_ts
+  from stu_users 
+]]>
+        </entry>
+
+        <entry key="attributes.COUNSELING.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'COUNSELING' attribute_key,
+       'NA' attribute_value,
+       null modified_ts
+  from stu_users 
+]]>
+        </entry>
+        <entry key="attributes.COMPEDCOMPLETED.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'COMPEDCOMPLETED' attribute_key,
+       'NA' attribute_value,
+       null modified_ts
+  from stu_users 
+]]>
+        </entry>
+
+        <entry key="attributes.CREDITHOURS.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'CREDITHOURS' attribute_key,
+       to_char(round(shrlgpa_gpa_hours,2)) attribute_value,
+       null modified_ts
+  from stu_users, shrlgpa, sgbstdn a
+ where shrlgpa_pidm = student_uid
+   and shrlgpa_gpa_type_ind = 'O'
+   and shrlgpa_levl_code = sgbstdn_levl_code
+   and sgbstdn_pidm = shrlgpa_pidm
+   and shrlgpa_gpa > 0
+   and sgbstdn_term_code_eff = ( select max(sgbstdn_term_code_eff)
+                                   from sgbstdn
+                                  where sgbstdn_pidm = a.sgbstdn_pidm
+                                    and sgbstdn_term_code_eff <= term_id )
+]]>
+        </entry>
+
+        <entry key="attributes.NONCREDITHOURS.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'NONCREDITHOURS' attribute_key,
+       'NA' attribute_value,
+       null modified_ts
+  from stu_users 
+]]>
+        </entry>
+
+        <entry key="attributes.OUTSIDETRANS.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'OUTSIDETRANS' attribute_key,
+       'NA' attribute_value,
+       null modified_ts
+  from stu_users 
+]]>
+        </entry>
+
+        <entry key="attributes.EGOL.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'EGOL' attribute_key,
+       stvegol_desc attribute_value,
+       null modified_ts
+  from stu_users, sgbstdn a, stvegol
+ where sgbstdn_pidm = student_uid
+   and sgbstdn_egol_code = stvegol_code
+   and sgbstdn_egol_code is not null
+   and sgbstdn_term_code_eff = ( select max(sgbstdn_term_code_eff)
+                                   from sgbstdn
+                                  where sgbstdn_pidm = a.sgbstdn_pidm
+                                    and sgbstdn_term_code_eff <= term_id )
+]]>
+        </entry>
+
+        <entry key="attributes.ATTEMPTEDUNITS.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'ATTEMPTEDUNITS' attribute_key,
+       to_char(round(shrlgpa_hours_attempted,2)) attribute_value,
+       null modified_ts
+  from stu_users, shrlgpa, sgbstdn a
+ where shrlgpa_pidm = student_uid
+   and shrlgpa_gpa_type_ind = 'O'
+   and shrlgpa_levl_code = sgbstdn_levl_code
+   and sgbstdn_pidm = shrlgpa_pidm
+   and shrlgpa_gpa > 0
+   and sgbstdn_term_code_eff = ( select max(sgbstdn_term_code_eff)
+                                   from sgbstdn
+                                  where sgbstdn_pidm = a.sgbstdn_pidm
+                                    and sgbstdn_term_code_eff <= term_id )
+]]>
+        </entry>
+
+        <entry key="attributes.RESIDENCY.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'RESIDENCY' attribute_key,
+       stvresd_desc attribute_value,
+       null modified_ts
+  from stu_users, sgbstdn a, stvresd
+ where sgbstdn_pidm = student_uid
+   and sgbstdn_resd_code is not null
+   and sgbstdn_resd_code = stvresd_code
+   and sgbstdn_term_code_eff = ( select max(sgbstdn_term_code_eff)
+                                   from sgbstdn
+                                  where sgbstdn_pidm = a.sgbstdn_pidm
+                                    and sgbstdn_term_code_eff <= term_id )
+]]>
+        </entry>
+
+        <entry key="attributes.PROGRAM_STUDY.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'PROGRAM_STUDY' attribute_key,
+       sgbstdn_program_1 attribute_value,
+       null modified_ts
+  from stu_users, sgbstdn a
+ where sgbstdn_pidm = student_uid
+   and sgbstdn_program_1 is not null
+   and sgbstdn_term_code_eff = ( select max(sgbstdn_term_code_eff)
+                                   from sgbstdn
+                                  where sgbstdn_pidm = a.sgbstdn_pidm
+                                    and sgbstdn_term_code_eff <= term_id )
+]]>
+        </entry>
+
+<!-- Copy this template for new Attributes
+        <entry key="attributes.NAME.template">
+<![CDATA[
+select student_uid user_integration_id,
+       'NAME' attribute_key,
+       'NA' attribute_value,
+       null modified_ts
+  from stu_users 
+]]>
+        </entry>
+-->
+
+
+        <!-- ***************** CONFIGURATION: RELATIONSHIPS  ******************** -->
+        <entry key="relationships.filename">relationships.txt</entry>
+        <entry key="relationships.term_based">0</entry>
+        <entry key="relationships.distinct_terms">select distinct term_id from sfish_st_transcript</entry>
+        <entry key="relationships.current_term"></entry>
+        <entry key="relationships.fields">parent_integration_id,parent_role,child_id,child_role,term_id</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="relationships.override">@relationships.sql</entry>
+        <entry key="relationships.extra">--Enter extra logic here</entry>
+        <entry key="relationships.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="relationships.template">
+<![CDATA[
+    -- EXAMPLE: Query not implemented
+    select distinct sibinst_pidm parent_integration_id,
+           'Counselor' parent_role,
+           'allStudents' child_id,
+           'Student' child_role,
+           'Ongoing' term_id
+      from sibinst A, sfish_terms, ( select person_uid from sfish_users where faculty = 1 or employee = 1 )
+     where sibinst_advr_ind = 'Y'
+       and sibinst_fcst_code = 'AC'
+       and sibinst_pidm = person_uid
+       and sibinst_term_code_eff = ( select max(sibinst_term_code_eff)
+                                       from sibinst
+                                      where sibinst_pidm = A.sibinst_pidm
+                                        and sibinst_term_code_eff <= term_id )
+       and display_start_date <= sysdate
+       and display_end_date >= sysdate
+     order by 1,3
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: DEMOGRAPHICS  ******************** -->
+        <entry key="demographics.filename">demographics.txt</entry>
+        <entry key="demographics.term_based">0</entry>
+        <entry key="demographics.distinct_terms">select distinct term_id from sfish_st_transcript</entry>
+        <entry key="demographics.current_term"></entry>
+        <entry key="demographics.fields">user_integration_id,pell_grant_eligible,race_ethnicity,gender,first_generation_student,educational_outreach_programs,residency_type,us_citizenship_status,visa_type,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="demographics.override">@demographics.sql</entry>
+        <entry key="demographics.extra">--Enter extra logic here</entry>
+        <entry key="demographics.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="demographics.template">
+<![CDATA[
+  SELECT A.spbpers_pidm user_integration_id,
+         CASE WHEN EXISTS 
+                   (SELECT b.rcresar_pidm, 
+                           b.rcresar_pell_elgbl
+                      FROM rcresar b
+                     WHERE b.rcresar_pidm = a.spbpers_pidm
+                       AND b.rcresar_pell_elgbl = 'Y'
+                       AND b.rcresar_aidy_code = (SELECT MAX(bb.stvterm_fa_proc_yr)
+                                                    FROM stvterm bb
+                                                   WHERE SYSDATE BETWEEN bb.stvterm_start_date AND bb.stvterm_end_date) )
+              THEN 'Y'
+              ELSE 'N'
+              END pell_grant_eligible,
+         CASE WHEN a.spbpers_ethn_code = 'N' THEN 'AI'
+              WHEN a.spbpers_ethn_code = 'A' THEN 'AS NH'
+              WHEN a.spbpers_ethn_code = 'B' THEN 'BL'
+              WHEN a.spbpers_ethn_code = 'H' THEN 'HI'
+              WHEN a.spbpers_ethn_code = 'W' THEN 'WH'
+              ELSE NULL
+              END race_ethnicity,
+         CASE WHEN a.spbpers_sex IN ('M','F') THEN a.spbpers_sex
+              ELSE 'U'
+              END gender,
+         NULL first_generation_student, 
+         NULL educational_outreach_programs, 
+         NULL residency_type, 
+         CASE WHEN a.spbpers_citz_code = 'Y' THEN '01'
+              WHEN EXISTS 
+                   (SELECT e.gorvisa_pidm
+                      FROM gorvisa e
+                     WHERE e.gorvisa_pidm = a.spbpers_pidm
+                       AND e.gorvisa_vtyp_code = 'PR'
+                       AND (SYSDATE >= e.gorvisa_visa_start_date OR e.gorvisa_visa_start_date IS NULL)
+                       AND (SYSDATE <= e.gorvisa_visa_expire_date OR e.gorvisa_visa_expire_date IS NULL)
+                       AND e.gorvisa_seq_no = (SELECT MAX(ee.gorvisa_seq_no)
+                                                 FROM gorvisa ee
+                                                WHERE e.gorvisa_pidm = ee.gorvisa_pidm)) THEN '02'
+              ELSE NULL
+              END us_citizenship_status,
+         (SELECT CASE WHEN a.spbpers_citz_code = 'Y'
+                                   OR f.gorvisa_vtyp_code = 'PR' THEN NULL
+                    WHEN f.gorvisa_vtyp_code IN ('F1','M1','H1','B1','B2','J1') THEN f.gorvisa_vtyp_code
+                    ELSE 'OV'
+                 END
+            FROM gorvisa f
+           WHERE f.gorvisa_pidm = a.spbpers_pidm
+             AND (SYSDATE >= f.gorvisa_visa_start_date  OR f.gorvisa_visa_start_date IS NULL)
+             AND (SYSDATE <= f.gorvisa_visa_expire_date OR f.gorvisa_visa_expire_date IS NULL)
+             AND f.gorvisa_seq_no = (SELECT MAX(ff.gorvisa_seq_no)
+                                       FROM gorvisa ff
+                                      WHERE f.gorvisa_pidm = ff.gorvisa_pidm)
+         ) visa_type,
+         null modified_ts
+      from sf_spbpers a, ( select person_uid from sfish_users where student = 1 )
+     where spbpers_pidm = person_uid
+     order by 1
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: ORGANIZATIONS  ******************** -->
+        <!-- DSPS, Veterans, Guardian Scholars, Athletes, EOPS, Financial Aid and International student -->
+        <entry key="organizations.filename">Organizations.txt</entry>
+        <entry key="organizations.term_based">0</entry>
+        <entry key="organizations.fields">integration_id,organization_name,organization_id,start_dt,end_dt,modified_ts,term_id</entry>
+        <entry key="organizations.class">com.starfish.sisintegration.AttributesFileGenerator</entry>
+        <!-- [CHANGE] List of organizations need to be updated per client -->
+        <entry key="organizations.list">DSPS,Veterans,GuardianScholars,Athletes,EOPS,FinancialAid,InternationalStudent</entry>
+        <entry key="organizations.list.unions"></entry>
+       
+        <!-- TODO, override still not implemented -->
+        <entry key="organizations.override">@organizations.sql</entry>
+        <entry key="organizations.extra">--Enter extra logic here</entry>
+        <entry key="organizations.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="organizations.template">
+<![CDATA[
+  select integration_id,
+         organization_name,
+         organization_id,
+         start_dt,
+         end_dt,
+         modified_ts,
+         term_id
+    from ( {{list.unions}} ) a
+   order by 1,2
+]]>
+        </entry>
+
+        <entry key="organizations.Veterans.template">
+<![CDATA[
+select term_id || '_' || 'Veterans' integration_id,
+       stvterm_desc || ' ' || 'Veterans' organization_name,
+       term_id || '_' || 'Veterans' organization_id,
+       null start_dt,
+       null end_dt,
+       null modified_ts,
+       term_id
+  from ( select distinct term_id from sfish_st_transcript) stu_users, stvterm
+ where stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="organizations.DSPS.template">
+<![CDATA[
+select distinct 
+       term_id || '_' || 'DSPS' integration_id,
+       stvterm_desc || ' ' || 'DSPS' organization_name,
+       term_id || '_' || 'DSPS' organization_id,
+       null start_dt,
+       null end_dt,
+       null modified_ts,
+       term_id
+  from ( select distinct term_id from sfish_st_transcript) stu_users, stvterm
+ where stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="organizations.GuardianScholars.template">
+<![CDATA[
+select distinct 
+       term_id || '_' || 'GuardianScholars' integration_id,
+       stvterm_desc || ' ' || 'Guardian Scholars' organization_name,
+       term_id || '_' || 'GuardianScholars' organization_id,
+       null start_dt,
+       null end_dt,
+       null modified_ts,
+       term_id
+  from ( select distinct term_id from sfish_st_transcript) stu_users, stvterm
+ where stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="organizations.Athletes.template">
+<![CDATA[
+select distinct 
+       term_id || '_' || 'Athletes' integration_id,
+       stvterm_desc || ' ' || 'Ahtletes' organization_name,
+       term_id || '_' || 'Athletes' organization_id,
+       null start_dt,
+       null end_dt,
+       null modified_ts,
+       term_id
+  from ( select distinct term_id from sfish_st_transcript) stu_users, stvterm
+ where stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="organizations.EOPS.template">
+<![CDATA[
+select distinct 
+       term_id || '_' || 'EOPS' integration_id,
+       stvterm_desc || ' ' || 'EOPS' organization_name,
+       term_id || '_' || 'EOPS' organization_id,
+       null start_dt,
+       null end_dt,
+       null modified_ts,
+       term_id
+  from ( select distinct term_id from sfish_st_transcript) stu_users, stvterm
+ where stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="organizations.FinancialAid.template">
+<![CDATA[
+select distinct 
+       term_id || '_' || 'FinancialAid' integration_id,
+       stvterm_desc || ' ' || 'Financial Aid' organization_name,
+       term_id || '_' || 'FinancialAid' organization_id,
+       null start_dt,
+       null end_dt,
+       null modified_ts,
+       term_id
+  from ( select distinct term_id from sfish_st_transcript) stu_users, stvterm
+ where stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="organizations.InternationalStudent.template">
+<![CDATA[
+select distinct 
+       term_id || '_' || 'InternationalStudent' integration_id,
+       stvterm_desc || ' ' || 'International Student' organization_name,
+       term_id || '_' || 'InternationalStudent' organization_id,
+       null start_dt,
+       null end_dt,
+       null modified_ts,
+       term_id
+  from ( select distinct term_id from sfish_st_transcript) stu_users, stvterm
+ where stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+
+
+        <!-- ***************** CONFIGURATION: ORGANIZATION MEMBERSHIP  ******************** -->
+        <entry key="orgmembership.filename">Orgmembership.txt</entry>
+        <entry key="orgmembership.term_based">0</entry>
+        <entry key="orgmembership.fields">organization_integration_id,user_integration_id,user_role,available_ind,start_date,end_date,last_access_date,modified_ts</entry>
+        <entry key="orgmembership.class">com.starfish.sisintegration.AttributesFileGenerator</entry>
+        <!-- [CHANGE] List needs to be updated per client -->
+        <entry key="orgmembership.list">DSPS,Veterans,Athletes,EOPS,InternationalStudent,FinancialAid</entry>
+        <entry key="orgmembership.list.unions"></entry>
+       
+        <!-- TODO, override still not implemented -->
+        <entry key="orgmembership.override">@orgmembership.sql</entry>
+        <entry key="orgmembership.extra">--Enter extra logic here</entry>
+        <entry key="orgmembership.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="orgmembership.template">
+<![CDATA[
+  select organization_integration_id,
+         user_integration_id,
+         user_role,
+         available_ind,
+         start_date,
+         end_date,
+         last_access_date,
+         modified_ts
+    from ( {{list.unions}} ) a
+   order by 1,2
+]]>
+        </entry>
+
+        <entry key="orgmembership._disa_exclude">DY,DN,NA,N</entry>
+        <entry key="orgmembership.DSPS.template">
+<![CDATA[
+select stu_users.term_id || '_' || 'DSPS' organization_integration_id,
+       stu_users.student_uid user_integration_id, 
+       'STUDENT' user_role,
+       1 available_ind,
+       null start_date,
+       null end_date,
+       null last_access_date,
+       null modified_ts
+  from sgrdisa a, stvterm b,
+       ( select distinct student_uid, term_id from sfish_st_transcript) stu_users
+ where a.sgrdisa_pidm = stu_users.student_uid
+   and a.sgrdisa_term_code = stu_users.term_id 
+   and a.sgrdisa_disa_code not in ({{_disa_exclude}})
+   and stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="orgmembership.Veterans.template">
+<![CDATA[
+select stu_users.term_id || '_' || 'Veterans' organization_integration_id,
+       stu_users.student_uid user_integration_id, 
+       'STUDENT' user_role,
+       1 available_ind,
+       null start_date,
+       null end_date,
+       null last_access_date,
+       null modified_ts
+  from sf_spbpers a, stvterm b,
+       ( select distinct student_uid, term_id from sfish_st_transcript) stu_users
+ where a.spbpers_pidm = stu_users.student_uid
+   and spbpers_vera_ind is not null
+   and stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="orgmembership.Athletes.template">
+<![CDATA[
+select stu_users.term_id || '_' || 'Athletes' organization_integration_id,
+       stu_users.student_uid user_integration_id, 
+       'STUDENT' user_role,
+       1 available_ind,
+       null start_date,
+       null end_date,
+       null last_access_date,
+       null modified_ts
+  from sgrsprt a, stvterm,
+       ( select distinct student_uid, term_id from sfish_st_transcript) stu_users
+ where a.sgrsprt_pidm = stu_users.student_uid
+   and a.sgrsprt_term_code = term_id
+   and stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="orgmembership.EOPS.template">
+<![CDATA[
+select stu_users.term_id || '_' || 'EOPS' organization_integration_id,
+       stu_users.student_uid user_integration_id, 
+       'STUDENT' user_role,
+       1 available_ind,
+       null start_date,
+       null end_date,
+       null last_access_date,
+       null modified_ts
+  from sgbeops a, stvterm,
+       ( select distinct student_uid, term_id from sfish_st_transcript) stu_users
+ where a.sgbeops_pidm = stu_users.student_uid
+   and a.sgbeops_term_code_eff = ( select max(sgbeops_term_code_eff) from sgbeops
+                                    where sgbeops_pidm = stu_users.student_uid
+                                      and sgbeops_term_code_eff <= term_id )
+   and stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="orgmembership.InternationalStudent.template">
+<![CDATA[
+select stu_users.term_id || '_' || 'InternationalStudent' organization_integration_id,
+       stu_users.student_uid user_integration_id, 
+       'STUDENT' user_role,
+       1 available_ind,
+       null start_date,
+       null end_date,
+       null last_access_date,
+       null modified_ts
+  from gorvisa a, stvterm,
+       ( select distinct student_uid, term_id from sfish_st_transcript) stu_users
+ where a.gorvisa_pidm = stu_users.student_uid
+   and stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+        <entry key="orgmembership.FinancialAid.template">
+<![CDATA[
+select distinct stu_users.term_id || '_' || 'FinancialAid' organization_integration_id,
+       stu_users.student_uid user_integration_id, 
+       'STUDENT' user_role,
+       1 available_ind,
+       null start_date,
+       null end_date,
+       null last_access_date,
+       null modified_ts
+  from rprawrd a, stvterm,
+       ( select distinct student_uid, term_id from sfish_st_transcript) stu_users
+ where a.rprawrd_pidm = stu_users.student_uid
+   and stvterm_code = term_id
+   and rprawrd_aidy_code = stvterm_fa_proc_yr 
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+
+<!-- [CHANGE] for new orgs, copy this
+        <entry key="orgmembership.xx.template">
+<![CDATA[
+select stu_users.term_id || '_' || 'xx' organization_integration_id,
+       stu_users.student_uid user_integration_id, 
+       'STUDENT' user_role,
+       1 available_ind,
+       null start_date,
+       null end_date,
+       null last_access_date,
+       null modified_ts
+  from sf_spbpers a, stvterm b,
+       ( select distinct student_uid, term_id from sfish_st_transcript) stu_users
+ where a.spbpers_pidm = stu_users.student_uid
+   and spbpers_vera_ind is not null
+   and stvterm_code = term_id
+   and ( stvterm_start_date >= sysdate
+      or stvterm_end_date >= sysdate - ( 12 * 30 ) )
+]]>
+        </entry>
+-->
+
+
+
+        <!-- ***************** CONFIGURATION: ATTENDANCE  ******************** -->
+        <entry key="attendance.filename">Attendance.txt</entry>
+        <entry key="attendance.term_based">1</entry>
+        <entry key="attendance.distinct_terms">select distinct term_id from sfish_st_transcript</entry>
+        <entry key="attendance.current_term"></entry>
+        <!-- need to move this to cusstom for the class -->
+        <entry key="attendance.fields">user_integration_id,course_section_integration_id,meeting_date,attendance_status,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="attendance.override">@attendance.sql</entry>
+        <entry key="attendance.extra">--Enter extra logic here</entry>
+        <entry key="attendance.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="attendance.template">
+<!-- [CHANGE] Query not implemented yet -->
+<![CDATA[
+select 's' + a.student_uid user_integration_id,
+       section_uid + '.' + term_id course_section_integration_id,
+       replace(convert(varchar(20), SADate, 111),'/','-') meeting_date,
+/*
+1049	1037	1	Absent	Student was absent from class
+1050	1037	3	Late	Student was late
+1051	1037	7	Tardy	Student was tardy
+1052	1037	2	Excused	Student was excused
+1053	1037	4	Left Early	Student left early
+1054	1037	6	Present	Student was present
+1055	1037	5	Other	See comment for explaination
+*/
+       CASE StatusID WHEN 1049 THEN 'ABSENT'
+                     WHEN 1050 THEN 'TARDY'
+                     WHEN 1051 THEN 'TARDY'
+                     WHEN 1052 THEN 'EXCUSED'
+                     WHEN 1053 THEN 'PRESENT'  
+                     WHEN 1054 THEN 'PRESENT'
+       /* ignored
+                     WHEN 1055 THEN 'ABSENT' -- Need confirmation
+       ELSE 'PRESENT'                        -- Need confirmation
+       */
+       END attendance_status,
+       null modified_ts
+  from sfish_st_transcript a,
+       StudentAttendance b {{extra_tables}}
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+   and a.student_uid = b.StudentUID
+   and a.section_uid = b.SROfferID
+   and a.term_id = b.TermCalendarID
+   and StatusID in (1049,1050,1051,1052,1053,1054)
+    {{extra}}
+ order by 1,2,3
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: COURSE CATALOG  ******************** -->
+        <entry key="course_catalog.filename">Course_catalog.txt</entry>
+        <entry key="course_catalog.term_based">0</entry>
+        <entry key="course_catalog.fields">integration_id,course_id,course_name,course_cip_code,default_credit_hours,Level,modified_ts,min_credit_hours,max_credit_hours,description,status,catalog_year,org_integration_id</entry> 
+        <!-- TODO, override still not implemented -->
+        <entry key="course_catalog.override">@course_catalog.sql</entry>
+        <entry key="course_catalog.extra">--Enter extra logic here</entry>
+        <entry key="course_catalog.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="course_catalog.template">
+<![CDATA[
+select
+   trim(scbcrse_subj_code) || '.' || trim(scbcrse_crse_numb) || '.' || trim(scbcrse_eff_term) integration_id,
+   -- trim(scbcrse_subj_code) || '.' || trim(scbcrse_crse_numb) || '.' || trim(scbcrse_eff_term) course_id,
+   replace(trim(scbcrse_subj_code) || '-' || trim(scbcrse_crse_numb),' ','') course_id,
+   scbcrse_title course_name,
+   scbcrse_cipc_code course_cip_code,
+   null default_credit_hours,
+   null "Level",
+   null modified_ts,
+/* 
+SCBCRSE_CREDIT_HR_IND
+ TO send both
+ OR send both
+ null send min
+*/
+   -- scbcrse_credit_hr_low min_credit_hours,
+   -- scbcrse_credit_hr_high max_credit_hours,
+   decode(scbcrse_credit_hr_ind,'OR',scbcrse_credit_hr_high,scbcrse_credit_hr_low) min_credit_hours,
+   decode(scbcrse_credit_hr_ind,null,scbcrse_credit_hr_low,scbcrse_credit_hr_high) max_credit_hours,
+/* Probably not used by other schools */
+/* Based on Tom's Basecamp description, add
+ listagg(
+        (case
+             when substr(scrtext_text, 1, 2) = 'P|' then substr(scrtext_text, 3, 60)
+             else ''
+        end), ' ')
+        within group (order by scrtext_seqno)
+*/
+   ( ( select scbdesc_text_narrative from scbdesc 
+      where scbdesc_subj_code = scbcrse_subj_code
+        and scbdesc_crse_numb = scbcrse_crse_numb
+        -- and scbdesc_term_code_eff = scbcrse_eff_term description,
+        and scbdesc_term_code_eff = ( select max(scbdesc_term_code_eff) from scbdesc
+                                       where scbdesc_subj_code = scbcrse_subj_code
+                                         and scbdesc_crse_numb = scbcrse_crse_numb
+                                         and scbdesc_term_code_eff <= scbcrse_eff_term) )
+       || 
+       ( select 
+       '<br>' ||
+       listagg(decode(substr(scrtext_text, 1, 2),'T|',substr(scrtext_text, 3, 60),''), ' ')
+       within group (order by scrtext_seqno) ||
+       '<br>' ||
+       listagg(decode(substr(scrtext_text, 1, 2),'H|',substr(scrtext_text, 3, 60),''), ' ')
+       within group (order by scrtext_seqno) ||
+       '<br>' ||
+       listagg(decode(substr(scrtext_text, 1, 2),'P|',substr(scrtext_text, 3, 60),''), ' ')
+       within group (order by scrtext_seqno) ||
+       '<br>' ||
+       listagg(decode(substr(scrtext_text, 1, 2),'R|',substr(scrtext_text, 3, 60),''), ' ')
+       within group (order by scrtext_seqno) ||
+       '<br>' ||
+       listagg(decode(substr(scrtext_text, 1, 2),'C|',substr(scrtext_text, 3, 60),''), ' ')
+       within group (order by scrtext_seqno) 
+       from scrtext
+       where scrtext_subj_code = scbcrse_subj_code
+         and scrtext_crse_numb = scbcrse_crse_numb
+         and scrtext_eff_term = ( select max(scrtext_eff_term) 
+                                    from scrtext 
+                                   where scrtext_subj_code = scbcrse_subj_code
+                                     and scrtext_crse_numb = scbcrse_crse_numb
+                                     and scrtext_eff_term <= scbcrse_eff_term ) )
+       ) description,
+   decode(scbcrse_csta_code, 'A','ACTIVE',
+                             'C','ACTIVE', --Cancelled is listed as Active
+                             'I','INACTIVE',
+                             'P','INACTIVE') status,
+   stvterm_acyr_code catalog_year,
+   null org_integration_id
+from scbcrse, stvterm
+where scbcrse_eff_term = stvterm_code
+ and stvterm_acyr_code != '9999'
+ -- and scbcrse_subj_code = 'VMD'
+ -- and scbcrse_crse_numb = '100'
+ order by 1
+]]>
+        </entry>
+
+
+        <!-- ***************** CONFIGURATION: REQUIREMENT COURSE SETS  ******************** -->
+        <entry key="requirement_course_sets.filename">Requirement_course_sets.txt</entry>
+        <entry key="requirement_course_sets.term_based">0</entry>
+        <!-- Not all fields supported yet --> 
+        <entry key="requirement_course_sets.fields">catalog_year,set_abbreviation,set_title,course_integration_id,suggested</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="requirement_course_sets.override">@course_catalog.sql</entry>
+        <entry key="requirement_course_sets.extra">--Enter extra logic here</entry>
+        <entry key="requirement_course_sets.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="requirement_course_sets.template">
+<![CDATA[
+select
+   stvterm_acyr_code catalog_year,
+   'DA' set_abbreviation,
+   'Degree Applicable' set_title,
+   trim(scbcrse_subj_code) || '.' || trim(scbcrse_crse_numb) || '.' || trim(scbcrse_eff_term) course_integration_id,
+   'YES' "suggested"
+from scbcrse, stvterm
+where scbcrse_eff_term = stvterm_code
+ and stvterm_acyr_code != '9999'
+ and scbcrse_aprv_code = '1'
+ order by 1
+]]>
+        </entry>
+       
+
+
+        <!-- ***************** CONFIGURATION: PREREQUISITES  ******************** -->
+        <entry key="prerequisites.filename">pre_Prereqs.txt</entry>
+        <entry key="prerequisites.term_based">0</entry>
+        <entry key="prerequisites.distinct_terms"></entry>
+        <entry key="prerequisites.current_term"></entry>
+        <!-- need to move this to cusstom for the class -->
+        <entry key="prerequisites.fields">section_integration_id,seqno,test,testscore,prereq_integration_id,min_grde,connector,lparen,rparen,concurrency_ind,modified_ts</entry>
+        <entry key="prerequisites.agfields">prereq_id,course_integration_id,prereq_type,prereq_value,and_id,or_id,prereq_test_id,prereq_operator,prereq_concurrent_flag,min_grade</entry>
+        <entry key="prerequisites.class">com.starfish.sisintegration.RequisitesFileGenerator</entry>
+        <entry key="prerequisites.id_prepend">a_</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="prerequisites.override">@prereqs.sql</entry>
+        <!-- Removing courses that are failing to provide valid prereqs -->
+        <!-- <entry key="prerequisites.extra">and ssrrtst_term_code = '201430' and ssrrtst_crn = 35978</entry> -->
+        <!-- <entry key="prerequisites.extra">and ssrrtst_term_code = '201430'</entry>  -->
+        <!-- <entry key="prerequisites.extra">and ssrrtst_term_code = '201430' and ssrrtst_crn in (35978,35731,35372,35117,35156,34956,34842,35042)</entry> -->
+        <entry key="prerequisites.extra">and scrrtst_subj_code || trim(scrrtst_crse_numb) not in ('ADMJ68','BCST144','CAHS60B','CINE25','ENGL36','ENGL46B','ENGL46C','GEOG111','PHYC2BL','CAHS206','DENT67','VMD182','BCST149') </entry> 
+        <!-- <entry key="prerequisites.extra"></entry> -->
+        <entry key="prerequisites.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="prerequisites.template">
+<![CDATA[
+-- Since these are courses, I should match with the course integration ID with the term
+-- instead of term_code_eff, I should get the term_code_eff from scbcrse, not from here
+select trim(scrrtst_subj_code) || '.' || trim(scrrtst_crse_numb) || '.' || B.scbcrse_eff_term section_integration_id,
+       scrrtst_seqno seqno,
+       scrrtst_tesc_code test,
+       -- scrrtst_test_score testscore,
+       rtrim(ltrim(scrrtst_test_score,'0'),'-') testscore,
+       -- MCC 20151214 changing effective term for prereq
+       -- decode(scrrtst_subj_code_preq, null, '', trim(scrrtst_subj_code_preq) || '.' || trim(scrrtst_crse_numb_preq) || '.' || C.scbcrse_eff_term) prereq_integration_id,
+       decode(scrrtst_subj_code_preq, null, '', trim(scrrtst_subj_code_preq) || '.' || trim(scrrtst_crse_numb_preq) || '.' || 
+          ( select scbcrse_eff_term from scbcrse C
+             where C.scbcrse_subj_code = scrrtst_subj_code_preq
+               and C.scbcrse_crse_numb = scrrtst_crse_numb_preq
+               and C.scbcrse_eff_term = ( select max(scbcrse_eff_term) from scbcrse
+                                           where scbcrse_subj_code = scrrtst_subj_code_preq
+                                             and scbcrse_crse_numb = scrrtst_crse_numb_preq
+                                             and scbcrse_eff_term <= scrrtst_term_code_eff ) ) ) prereq_integration_id,                                   
+       -- the >= or = needs to be implemented in the code, not in the query
+       -- decode(length(trim(translate(score,' -.0123456789',' '))),null,score,0,score,'no') 
+       -- scrrtst_min_grde min_grde,
+       decode(scrrtst_min_grde,'A+','4.0',
+                               'A','4.0',
+                               'A-','3.7',
+                               'B+','3.3',
+                               'B','3.0',
+                               'B-','2.7',
+                               'C+','2.3',
+                               'C','2.0',
+                               'C-','1.7',
+                               'D+','1.3',
+                               'D','1.0',
+                               'E','0.0',
+                               'F','0.0') min_grde,
+       scrrtst_connector connector,
+       scrrtst_lparen lparen,
+       scrrtst_rparen rparen,
+       scrrtst_concurrency_ind concurrency_ind,
+       scrrtst_activity_date modified_ts
+  from scrrtst A, scbcrse B {{extra_tables}}
+ where ( {{term_based}} = 0 or scrrtst_term_code_eff = '{{current_term}}' )
+   and B.scbcrse_subj_code = scrrtst_subj_code
+   and B.scbcrse_crse_numb = scrrtst_crse_numb
+   and B.scbcrse_eff_term = ( select max(scbcrse_eff_term) from scbcrse
+                                  where scbcrse_subj_code = scrrtst_subj_code
+                                    and scbcrse_crse_numb = scrrtst_crse_numb
+                                    and scbcrse_eff_term <= scrrtst_term_code_eff )
+   and not exists ( select 1 from scrrtst 
+                     where scrrtst_subj_code = A.scrrtst_subj_code
+                       and scrrtst_crse_numb = A.scrrtst_crse_numb
+                       and scrrtst_term_code_eff > A.scrrtst_term_code_eff
+                       and not exists ( select 1 from scbcrse
+                                         where scbcrse_subj_code = A.scrrtst_subj_code
+                                           and scbcrse_crse_numb = A.scrrtst_crse_numb
+                                           and scbcrse_eff_term > B.scbcrse_eff_term ) )   
+   and ( scrrtst_tesc_code is not null or scrrtst_subj_code_preq is not null )       
+   -- MCC 20160112 removing not longer effective prereqs
+   and not exists ( select 1 from scrrtst C
+                     where scrrtst_subj_code = A.scrrtst_subj_code
+                       and scrrtst_crse_numb = A.scrrtst_crse_numb
+                       and scrrtst_term_code_eff > A.scrrtst_term_code_eff
+                       and B.scbcrse_eff_term = ( select max(scbcrse_eff_term) from scbcrse
+                                                   where scbcrse_subj_code = C.scrrtst_subj_code
+                                                     and scbcrse_crse_numb = C.scrrtst_crse_numb
+                                                     and scbcrse_eff_term <= C.scrrtst_term_code_eff ) )  
+    {{extra}}
+ order by section_integration_id, seqno
+]]>
+       </entry>
+
+        <!-- ***************** CONFIGURATION: COREQUISITES  ******************** -->
+        <entry key="corequisites.filename">co_Prereqs.txt</entry>
+        <entry key="corequisites.term_based">0</entry>
+        <entry key="corequisites.distinct_terms"></entry>
+        <entry key="corequisites.current_term"></entry>
+        <!-- need to move this to cusstom for the class -->
+        <entry key="corequisites.fields">section_integration_id,seqno,test,testscore,prereq_integration_id,min_grde,connector,lparen,rparen,concurrency_ind,modified_ts</entry>
+        <entry key="corequisites.agfields">prereq_id,course_integration_id,prereq_type,prereq_value,and_id,or_id,prereq_test_id,prereq_operator,prereq_concurrent_flag,min_grade</entry>
+        <entry key="corequisites.class">com.starfish.sisintegration.RequisitesFileGenerator</entry>
+        <entry key="corequisites.id_prepend">b_</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="corequisites.override">@prereqs.sql</entry>
+        <entry key="corequisites.extra"></entry>
+        <entry key="corequisites.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="corequisites.template">
+<![CDATA[
+select trim(scrcorq_subj_code) || '.' || trim(scrcorq_crse_numb) || '.' || B.scbcrse_eff_term section_integration_id,
+       null seqno,
+       null test,
+       null testscore,
+       trim(scrcorq_subj_code_corq) || '.' || trim(scrcorq_crse_numb_corq) || '.' || C.scbcrse_eff_term prereq_integration_id,
+       null min_grde,
+       ( select 'A' from dual 
+          where scrcorq_subj_code_corq || scrcorq_crse_numb_corq 
+                                  != ( select min(scrcorq_subj_code_corq || scrcorq_crse_numb_corq) from scrcorq
+                                             where scrcorq_subj_code = A.scrcorq_subj_code 
+                                               and scrcorq_crse_numb = A.scrcorq_crse_numb
+                                               and scrcorq_subj_code_corq is not null
+                                               and scrcorq_eff_term = A.scrcorq_eff_term ) ) connector,
+       null lparen,
+       null rparen,
+       'Y' concurrency_ind,
+       scrcorq_activity_date modified_ts
+  from scrcorq A, scbcrse B, scbcrse C {{extra_tables}}
+ where ( {{term_based}} = 0 or scrcorq_eff_term = '{{current_term}}' )
+   and scrcorq_subj_code_corq is not null
+   and B.scbcrse_subj_code = scrcorq_subj_code
+   and B.scbcrse_crse_numb = scrcorq_crse_numb
+   and B.scbcrse_eff_term = ( select max(scbcrse_eff_term) from scbcrse
+                                  where scbcrse_subj_code = scrcorq_subj_code
+                                    and scbcrse_crse_numb = scrcorq_crse_numb
+                                    and scbcrse_eff_term <= scrcorq_eff_term )
+   and not exists ( select 1 from scrcorq
+                     where scrcorq_subj_code = A.scrcorq_subj_code
+                       and scrcorq_crse_numb = A.scrcorq_crse_numb
+                       and scrcorq_eff_term > A.scrcorq_eff_term
+                       and not exists ( select 1 from scbcrse
+                                         where scbcrse_subj_code = A.scrcorq_subj_code
+                                           and scbcrse_crse_numb = A.scrcorq_crse_numb
+                                           and scbcrse_eff_term > B.scbcrse_eff_term ) )   
+   and C.scbcrse_subj_code = scrcorq_subj_code_corq
+   and C.scbcrse_crse_numb = scrcorq_crse_numb_corq
+   and C.scbcrse_eff_term = ( select max(scbcrse_eff_term) from scbcrse
+                                  where scbcrse_subj_code = scrcorq_subj_code_corq
+                                    and scbcrse_crse_numb = scrcorq_crse_numb_corq
+                                    and scbcrse_eff_term <= scrcorq_eff_term )
+   {{extra}}
+order by 1,5, scrcorq_subj_code_corq || scrcorq_crse_numb_corq 
+]]>
+       </entry>
+
+<!-- Priorities
+Files that still need to be created
+  Sections Schedule
+  Courses Equivalencies
+  Courses Terms Offered
+  Student Prereq Groups
+  Student Transfer Records
+  Test Keys
+  Student Test Results
+  Program Catalog >> Not needed. Was once used for Starfish ADVISING.
+  Student Program 
+  Admissions
+  Demographics
+  Student Term Status
+  Placement Tests
+  Financial Aid
+Files that may not be needed
+  Meetings
+  Notes
+  Student Exit
+  Alternate Student IDs
+  Enrollment Attributes
+  Assessments
+  Scores
+  Attendance
+-->
+</properties>

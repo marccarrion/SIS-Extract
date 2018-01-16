@@ -1,0 +1,898 @@
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<!-- *************** Extra configuration for SIS Integration package ***************** -->
+
+        <!-- ***************** CONNECTION VALIDATION ******************** -->
+        <!-- [CHANGE] Set the JDBC driver and connection string to connect to your SIS -->
+        <!-- Banner, CAMS, Colleague -->
+        <entry key="SIS">Colleague</entry>
+        <entry key="DBConnection">ecc-prod</entry>
+        <entry key="DBHome">/datatel/coll18/test/apphome</entry>
+
+        <!-- [CHANGE] Enter username and password to your database. Run the integration with the -encrypt command in order to get a an encrypted password and replace the plain text password for the encrypted version -->
+        <entry key="DBUsername">sodtest</entry>
+        <entry key="DBPassword">ulm/0j6nwI2Ewx+GUAUmzEqTVOEPog8ZKH2ahH2bKzo=</entry> 
+        <!-- <entry key="DBPassword">f3COSPiDIa4uYJpS4+8nDHxE0NP/voMhJKMVAQ0nnxM=</entry> -->
+
+        <!-- [DO NOT CHANGE] Set of commands used to validate that the connection is properly set. This piece is dependent on the SIS used, and can be changed if needed, but should not need to be changed -->
+        <entry key="ValidateConnection">LIST STUDENT.ACAD.CRED STC.PERSON.ID STC.CURRENT.STATUS STC.TERM STC.COURSE.SECTION STC.CRED SAMPLE 10</entry>
+
+        <!-- ***************** SCHEDULING *************************** -->
+        <!-- [CHANGE] String used to configure the scheduling of the extracts -->
+        <!-- Using Quartz: http://quartz-scheduler.org/documentation/quartz-2.1.x/examples/Example3 -->
+        <!-- Example below is daily monday to friday at 3am -->
+        <!-- <entry key="Schedule">0 0 3 ?  * MON,TUE,WED,THU,FRI</entry> -->
+        <!-- Every hour at xx:15 and xx:45 -->
+        <entry key="Schedule">0 26 * ?  * MON,TUE,WED,THU,FRI</entry> 
+
+        <!-- ***************** ACCESS VALIDATION ******************** -->
+        <!-- [DO NOT CHANGE] The following script is used to validate access to the right set of tables. It's different for each SIS and there should not be any need to change it -->
+        <!-- CREATE THE TEMPORARY ACTIVE LISTS, OR DROP EXISTING ONES -->
+        <!-- <entry key="ValidateAccess">LIST STUDENT.ACAD.CRED STC.PERSON.ID STC.CURRENT.STATUS STC.TERM STC.COURSE.SECTION STC.CRED SAMPLE 10</entry> -->
+        <!-- <entry key="ValidateAccess">LIST COURSE.SEC.FACULTY @ID CSF.FACULTY CSF.FACULTY.FIRST.NAME SAMPLE 10</entry> -->
+        <!-- <entry key="ValidateAccess">LIST PERSON @ID WHERE.USED X.PERSON.WEBID WITH @ID = "0734695" "0518575" SAMPLE 10</entry> -->
+        <!-- <entry key="ValidateAccess">LIST PERSON @ID FIRST.NAME LAST.NAME WHERE.USED X.PERSON.WEBID X.PER.OEE.USERNAME  WITH @ID = "1846933" SAMPLE 10</entry> -->
+        <!-- <entry key="ValidateAccess">LIST COURSE.SEC.FACULTY WITH CSF.FACULTY = "1846933" SAMPLE 10</entry> -->
+        <!-- <entry key="ValidateAccess">LIST PERSON @ID FIRST.NAME LAST.NAME WHERE.USED X.PERSON.WEBID X.PER.OEE.USERNAME GROUPS WITH GROUPS NE "" SAMPLE 10</entry>  -->
+        <!-- WITH returns all the members of the list, regardless if they match or not the selected ones, as long as one matches -->
+        <!-- WHERE did not return anything -->
+        <!-- <entry key="ValidateAccess">LIST PERSON @ID FIRST.NAME LAST.NAME WHERE.USED X.PERSON.WEBID X.PER.OEE.USERNAME GROUPS WITH GROUPS EQ "Counselor" "Financial Aid Advisor" "General Advisor" BY.EXP GROUPS SAMPLE 10</entry> -->
+        <!-- <entry key="ValidateAccess">LIST PERSON @ID FIRST.NAME LAST.NAME WHERE.USED X.PERSON.WEBID X.PER.OEE.USERNAME GROUPS WHEN GROUPS = "Counselor" "Financial Aid Advisor" "General Advisor" BY.EXP GROUPS SAMPLE 10</entry> -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL SAMPLE 10</entry>  -->
+        <!-- Testing prereqs -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMTS @ID ACR.PREREQ.COURSE EVAL 'TRANS("COURSES",ACR.PREREQ.COURSE,CRS.NAME,"X")' ACR.TOP.REQMT.BLOCK WITH ACR.PREREQ.COURSE = "14654" SAMPLE 10</entry> -->
+        <!-- top -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH @ID = "30441" </entry> -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH ACRB.ACAD.REQMT = "1188" </entry> -->
+        <!-- list of courses -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH @ID = "30442" </entry> -->
+        <!-- two courses -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH @ID = "56113" </entry> -->
+        <!-- What is the FROM? ORS, do we need the min.no.courses-->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH ACRB.FROM.COURSES NE "" </entry>  -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH ACRB.ACAD.REQMT = "2697" </entry> -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH ACRB.MIN.NO.COURSES GT "1" </entry> -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH ACRB.ACAD.REQMT = "2420.04" </entry> -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMTS ALL WITH @ID = "2420.04" </entry> -->
+        <!-- <entry key="ValidateAccess">LIST GRADES ALL WITH GRD.GRADE EQ 'C' 'EQ' SAMPLE 10 </entry> -->
+        <!-- <entry key="ValidateAccess">LIST STUDENT.ACAD.LEVELS STA.OTHER.COHORT.GROUPS WITH STA.OTHER.COHORT.GROUPS NE '' SAMPLE 10 </entry> -->
+        <!-- <entry key="ValidateAccess">LIST STUDENT.ACAD.LEVELS STA.OTHER.COHORT.GROUPS WITH STA.OTHER.COHORT.GROUPS NE '' SAMPLE 10 </entry> -->
+        <!-- <entry key="ValidateAccess">LIST STUDENT.ACAD.CRED STC.ACAD.LEVEL WITH STC.TERM = '2016/SP' AND ( STC.CURRENT.STATUS EQ 'A' OR STC.CURRENT.STATUS EQ 'N' )</entry> -->
+        <!-- <entry key="ValidateAccess">LIST ST.VALCODES VAL.INTERNAL.CODE VAL.EXTERNAL.REPRESENTATION WITH @ID = 'INSTITUTION.COHORTS' </entry> -->
+        <!-- <entry key="ValidateAccess">LIST STUDENTS STS.ACAD.STANDING X.STU.STANDING X.STU.VETERAN WITH X.STU.VETERAN NE ""</entry>  -->
+        <!-- <entry key="ValidateAccess">LIST CORE.VALCODES VAL.INTERNAL.CODE VAL.EXTERNAL.REPRESENTATION SUBR("CC.GET.VALCODE.IDESC",VAL.INTERNAL.CODE,"VETERAN.TYPES") WITH @ID = 'VETERAN.TYPES' </entry> -->
+        <!-- <entry key="ValidateAccess">LIST TERMS EVAL 'OCONV(DATE(),"D-YMD[4,2,2]")' EVAL 'OCONV(DATE()-(365*2)),"D-YMD[4,2,2]")' EVAL 'TRANS("TERMS",@ID,TERM.START.DATE,"X")' WITH TERM.START.DATE GT EVAL 'DATE()-365' SAMPLE 30</entry> -->
+        <!-- <entry key="ValidateAccess">LIST STUDENT.ACAD.CRED ALL WITH STC.SOURCE.DATA EQ 'NORMAL REGISTERED COURSE' SAMPLE 10</entry> -->
+        <!-- <entry key="ValidateAccess">LIST STUDENT.ACAD.CRED ALL WITH STC.SOURCE.DATA NE 'NORMAL REGISTERED COURSE' SAMPLE 10</entry> -->
+        <!-- <entry key="ValidateAccess">LIST STUDENT.ACAD.CRED STC.SOURCE.DATA WITH @ID EQ 13317303</entry> -->
+        <!-- <entry key="ValidateAccess">LIST STUDENT.ACAD.CRED ALL WITH STC.STUDENT.EQUIV.EVAL = "TCE" SAMPLE 10</entry>  -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH @ID = "56113"</entry>  -->
+        <!-- <entry key="ValidateAccess">LIST ACAD.REQMT.BLOCKS ALL WITH ACRB.ACAD.REQMT = "1188" </entry> -->
+        <!-- <entry key="ValidateAccess">LIST COURSES  @ID COL.HDG  "course_integration_id"  EVAL 'SF_NULL_VALUE' COL.HDG  "catalog_year"  EVAL 'DA' COL.HDG  "set_abbreviation"  EVAL 'Degree Applicable' COL.HDG  "set_title"  EVAL 'YES' COL.HDG  "suggested"  CRSF.TRANSFER.STATUS COL.HDG  "__transfer" SAMPLE 10</entry> -->
+        <entry key="ValidateAccess">LIST COURSES @ID COL.HDG "course_integration_id" EVAL 'SF_NULL_VALUE' COL.HDG "catalog_year" EVAL 'DA' COL.HDG "set_abbrevation" EVAL 'Degree_Applicable' COL.HDG "set_title" EVAL 'YES' COL.HDG "suggested" CRS.TRANSFER.STATUS COL.HDG "__transfer" SAMPLE 10</entry>
+
+
+        <!-- ***************** TEMPORARY TABLES ******************** -->
+        <!-- [CONFIGURE] Use the configuration items for each temporary table in order to configure the creation of the temporary tables.    -->
+        <!--             The code can be edited based on your particular school requirements, but it's preferred to use configuration items  -->
+        <!-- rather than changing the actual queries                                                                                         -->
+        <!--             Configuration items are shown as {{parameter}} in the queries below, and are configured using an entry              -->
+        <!--             key named TEMPORARYTABLE.PARAMETER                                                                                  -->
+        <!-- <entry key="CreateTemporaryTables">STARFISH.STUDENT.POPULATION,STARFISH.TRANSCRIPT.HISTORY,STARFISH.SECTIONS,STARFISH.COURSES,STARFISH.TERMS,STARFISH.FACULTY,STARFISH.USERS</entry> -->
+        <!-- <entry key="CreateTemporaryTables">STARFISH.STUDENT.POPULATION,STARFISH.TRANSCRIPT.HISTORY,STARFISH.SECTIONS,STARFISH.TERMS,STARFISH.ACAD.LEVELS,STARFISH.ORGANIZATIONS,STARFISH.TESTSCORES</entry> -->
+        <entry key="CreateTemporaryTables">STARFISH.COURSES,STARFISH.TERMS,STARFISH.PREREQS</entry>
+        <!-- <entry key="CreateTemporaryTables">STARFISH.STUDENT.POPULATION,STARFISH.TRANSCRIPT.HISTORY,STARFISH.SECTIONS,STARFISH.COURSES,STARFISH.TERMS,STARFISH.FACULTY,STARFISH.USERS,STARFISH.PREREQS,STARFISH.EXECUTE,STARFISH.ACAD.LEVELS,STARFISH.ORGANIZATIONS,STARFISH.TESTSCORES</entry>  -->
+
+<!--  Iterative Active LIST
+        STARFISH.TRANSCRIPT.HISTORY ... Sections from STUDENT.ACAD.CRED
+        STARFISH.STUDENT.POPULATION ... Only students from STUDENT.ACAD.CRED right now
+        STARFISH.SECTIONS           ... is the Sections
+        STARFISH.COURSES            ... is the Courses
+
+        CLEARSELECT
+-->
+
+<!-- Make it two years based on the other query -->
+        <!-- <entry key="STARFISH.STUDENT.POPULATION.days">730</entry> -->
+        <entry key="STARFISH.STUDENT.POPULATION.days">30</entry> 
+        <entry key="CreateTemporary.STARFISH.STUDENT.POPULATION">
+<!-- SELECT STUDENT.ACAD.CRED WITH STC.TERM = '{{Term}}' AND ( STC.CURRENT.STATUS EQ 'A' OR STC.CURRENT.STATUS EQ 'N' OR STC.CURRENT.STATUS = 'D' ) SAVING UNIQUE STC.PERSON.ID -->
+<![CDATA[CLEARSELECT
+SELECT STUDENT.ACAD.CRED WITH EVAL 'TRANS("TERMS",STC.TERM,TERM.START.DATE,"X")' GT EVAL 'DATE()-{{days}}' AND ( STC.CURRENT.STATUS EQ 'A' OR STC.CURRENT.STATUS EQ 'N' OR STC.CURRENT.STATUS = 'D' ) SAVING UNIQUE STC.PERSON.ID
+SAVE.LIST STARFISH.STUDENT.POPULATION]]>
+        </entry>
+
+        <entry key="CreateTemporary.STARFISH.TESTSCORES">
+<![CDATA[CLEARSELECT
+GET.LIST STARFISH.TRANSCRIPT.HISTORY
+SELECT STUDENT.ACAD.CRED SAVING UNIQUE PST.STUDENT.NON.COURSES
+SAVE.LIST STARFISH.TESTSCORES]]>
+        </entry>
+
+        <entry key="STARFISH.ACAD.LEVELS.Term">2015/FA</entry>
+        <entry key="CreateTemporary.STARFISH.ACAD.LEVELS">
+<![CDATA[CLEARSELECT
+GET.LIST STARFISH.STUDENT.POPULATION
+SELECT STUDENTS SAVING UNIQUE X.STU.ACAD.LEVEL.KEY
+SAVE.LIST STARFISH.ACAD.LEVELS]]>
+        </entry>
+
+        <entry key="STARFISH.TRANSCRIPT.HISTORY.IDs">X</entry>
+        <entry key="CreateTemporary.STARFISH.TRANSCRIPT.HISTORY">
+<![CDATA[CLEARSELECT
+DELETE.LIST STARFISH.TRANSCRIPT.HISTORY
+GET.LIST STARFISH.STUDENT.POPULATION
+<< LOOP PERSON @ID 100 >>
+SELECT STUDENT.ACAD.CRED WITH STC.PERSON.ID = {{IDs}}
+SAVE.LIST STARFISH.TRANSCRIPT.HISTORY.AUX
+GET.LIST STARFISH.TRANSCRIPT.HISTORY.AUX TO 1
+GET.LIST STARFISH.TRANSCRIPT.HISTORY TO 2
+MERGE.LIST 1 UNION 2
+SAVE.LIST STARFISH.TRANSCRIPT.HISTORY
+<< END LOOP >>]]>
+</entry>
+
+        <entry key="CreateTemporary.STARFISH.SECTIONS">
+<![CDATA[CLEARSELECT
+GET.LIST STARFISH.TRANSCRIPT.HISTORY
+SELECT STUDENT.ACAD.CRED SAVING UNIQUE STC.COURSE.SECTION
+SAVE.LIST STARFISH.SECTIONS]]>
+        </entry>
+
+
+        <entry key="CreateTemporary.STARFISH.COURSES">
+<![CDATA[CLEARSELECT
+GET.LIST STARFISH.SECTIONS
+SELECT COURSE.SECTIONS SAVING UNIQUE SEC.COURSE
+SAVE.LIST STARFISH.COURSES]]>
+        </entry>
+
+        <entry key="CreateTemporary.STARFISH.TERMS">
+<![CDATA[CLEARSELECT
+SELECT TERMS 
+SAVE.LIST STARFISH.TERMS]]>
+        </entry>
+
+        <entry key="CreateTemporary.STARFISH.FACULTY">
+<![CDATA[CLEARSELECT
+SELECT PERSON WITH WHERE.USED = "STAFF" "FACULTY"
+SAVE.LIST STARFISH.FACULTY]]>
+        </entry>
+
+        <entry key="CreateTemporary.STARFISH.USERS">
+<![CDATA[CLEARSELECT
+GET.LIST STARFISH.FACULTY TO 1
+GET.LIST STARFISH.STUDENT.POPULATION TO 2
+MERGE.LIST 1 UNION 2
+SAVE.LIST STARFISH.USERS]]>
+        </entry>
+
+        <entry key="STARFISH.TEACHING.Term">2015/FA</entry>
+        <entry key="CreateTemporary.STARFISH.TEACHING">
+<![CDATA[CLEARSELECT
+SELECT CSF.SEC.FACULTY WHERE CSF.SECTION.TERM = '{{Term}}'
+SAVE.LIST STARFISH.TEACHING]]>
+        </entry>
+
+<!-- SELECT ACAD.REQMTS SAVING UNIQUE ACR.TOP.REQMT.BLOCK
+     SELECT ACAD.REQMTS.BLOCKS -->
+        <entry key="CreateTemporary.STARFISH.PREREQS">
+<![CDATA[CLEARSELECT
+GET.LIST STARFISH.COURSES
+SELECT COURSES SAVING UNIQUE CRS.PREREQS
+SELECT ACAD.REQMTS 
+SAVE.LIST STARFISH.PREREQS]]>
+        </entry>
+
+<!--
+10 FOR I=1 TO 10 \ PRINT I \ NEXT I
+An error is generated if, in immediate mode, a NEXT is not included on the line containing FOR.
+FOR/NEXT loops may be nested if certain precautions are taken. The following is an example of valid nesting:
+10 FOR A=1 TO 10
+20 FOR B=1 TO 5
+30 FOR C=B+1 TO 4*A
+40 REM Statements
+50 NEXT C
+60 NEXT B
+70 NEXT A 
+-->
+        <entry key="CreateTemporary.STARFISH.EXECUTE">
+<![CDATA[CLEARSELECT
+GET.LIST STARFISH.COURSES
+EXECUTE "LET A = SQR(100) * 100 \ PRINT A" 
+EXECUTE "LET B = SQR(A) * 100 \ PRINT B" 
+EXECUTE "10 FOR I=1 TO 10 \ PRINT I \ NEXT I"
+]]>
+        </entry>
+
+        <entry key="CreateTemporary.STARFISH.ORGANIZATIONS">
+<![CDATA[CLEARSELECT
+SELECT ST.VALCODES WITH @ID = 'INSTITUTION.COHORTS'
+SAVE.LIST STARFISH.ORGANIZATIONS]]>
+        </entry>
+
+
+        <!-- ***************** FILES TO GENERATE ******************** -->
+        <!-- <entry key="NewLine">\n</entry> -->
+        <entry key="Files">course_catalog,enrollments,outcomes,sections,teaching,users,academic_calendar,demographics,admissions,student_program,program_catalog,student_term,financial_aid,organizations,orgmembership,relationships,attributes,prerequisites,corequisites,concurrent,attendance,scores,transfers,requirement_course_sets</entry>
+
+        <!-- [CHANGE] Location where the files will be created -->
+        <entry key="ExtractLocation">starfish_extracts</entry>
+        <entry key="TempExtractLocation">starfish_extracts_temp</entry>
+        <entry key="AdapterConfig">datapump-common/config.xml</entry> 
+        <!-- <entry key="AdapterConfig">config.bfit.xml2</entry> -->
+        <entry key="Validate">datapump-common;validate.sh</entry>
+
+        <!-- [CHANGE] For each file if it needs to be generated or skipped -->
+        <entry key="enrollments.generate">0</entry>
+        <entry key="sections.generate">0</entry>
+        <entry key="users.generate">0</entry>
+        <!-- Still missing some fields -->
+        <entry key="course_catalog.generate">0</entry>
+        <entry key="academic_calendar.generate">0</entry>
+        <!-- stop here for basic set of files -->
+        <entry key="outcomes.generate">0</entry>
+        <entry key="teaching.generate">0</entry>
+        <entry key="relationships.generate">0</entry>
+        <entry key="orgmembership.generate">0</entry>
+        <entry key="organizations.generate">0</entry>
+        <!-- Prerequisites -->
+        <entry key="prerequisites.generate">1</entry>
+        <entry key="corequisites.generate">1</entry>
+        <entry key="concurrent.generate">1</entry>
+        <!-- Two attributes to start -->
+        <entry key="attributes.generate">0</entry>
+        <entry key="scores.generate">0</entry>
+        <entry key="transfers.generate">0</entry>
+        <entry key="requirement_course_sets.generate">1</entry>
+        <!-- Pending Colleague implementation -->
+        <entry key="demographics.generate">0</entry>
+        <!-- Then we can go from here, still missing logic for this -->
+        <entry key="program_catalog.generate">0</entry>
+        <entry key="admissions.generate">0</entry>
+        <entry key="student_program.generate">0</entry>
+        <entry key="student_term.generate">0</entry>
+        <entry key="financial_aid.generate">0</entry>
+        <entry key="attendance.generate">0</entry>
+       
+
+        <!-- For each file
+             - Name to generate
+             - Term based or one file for all terms 
+             - Fields
+             - Override script [NOT IMPLEMENTED]
+             - Variables for the query 
+             - Query (called 'template')
+        -->
+
+        <!-- ***************** CONFIGURATION: ENROLLMENTS  ******************** -->
+        <entry key="enrollments.filename">Enrollment.txt</entry>
+        <!-- <entry key="enrollments.fields">SCS.COURSE.SECTION,STC.PERSON.ID,EVAL 'Student', EVAL '1', STC.CRED, EVAL 'SF_NULL_VALUE', STC.CURRENT.STATUS, EVAL 'SF_NULL_VALUE'</entry> -->
+        <entry key="enrollments.fields">SCS.COURSE.SECTION,STC.PERSON.ID,EVAL 'Student', EVAL '1', STC.CRED, STC.CURRENT.STATUS, EVAL 'SF_NULL_VALUE'</entry>
+        <entry key="enrollments.colleagueFile">STUDENT.ACAD.CRED</entry>
+        <entry key="enrollments.with">WITH SCS.COURSE.SECTION NE '' and STC.CURRENT.STATUS EQ 'A' 'N' 'D'</entry>
+        <!-- <entry key="enrollments.header">course_section_integration_id,user_integration_id,user_role,available_ind,credit_hours,last_accessed_date,authoritative_status,modified_ts</entry> -->
+        <entry key="enrollments.header">course_section_integration_id,user_integration_id,user_role,available_ind,credit_hours,authoritative_status,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="enrollments.extra">--Enter extra logic here</entry>
+        <entry key="enrollments.template">GET.LIST STARFISH.TRANSCRIPT.HISTORY</entry>
+        <entry key="enrollments.testfile">/tmp/enrollments_1.xml</entry>
+        <entry key="enrollments.script"><![CDATA[
+// We are not sending other statuses??
+/*
+	01 –Active 
+	02 – Dropped
+	03 –Withdrawn
+	04 – Completed 
+	05 – Incomplete
+	06 – Deleted/Dropped with no penalty
+*/
+if ( authoritative_status == 'A' ) { 
+     authoritative_status = '01';
+}
+if ( authoritative_status == 'N' ) { 
+     authoritative_status = '01';
+}
+if ( authoritative_status == 'D' ) { 
+     authoritative_status = '02';
+}
+]]></entry>
+
+        <!-- ***************** CONFIGURATION: USERS  ******************** -->
+        <entry key="users.filename">Users.txt</entry>
+        <!-- <entry key="users.fields">@ID,LAST.NAME,MIDDLE.NAME,FIRST.NAME,X.PERSON.EMAIL,X.PERSON.OTHER.EMAIL,@ID,X.PERSON.WEBID,GENDER,BIRTH.DATE,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',X.ADDR.PHONE,PERPHONE,EVAL 'SF_NULL_VALUE',EVAL '1',EVAL '1',EVAL '1',X.PER.CITY,X.PER.STATE,X.PER.ZIP,COUNTY</entry> -->
+        <!-- removed Home County and hardcoded email for wrong emails -->
+        <entry key="users.fields">@ID,LAST.NAME,MIDDLE.NAME,FIRST.NAME,X.PERSON.EMAIL,X.PERSON.OTHER.EMAIL,@ID,X.PER.OEE.USERNAME,GENDER,EVAL 'OCONV(BIRTH.DATE\,"D-YMD[4\,2\,2]")',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',PERSONAL.PHONE.NUMBER,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL '1',EVAL '1',EVAL '1',X.PER.CITY,X.PER.STATE,X.PER.ZIP,PERSONAL.PHONE.TYPE,WHERE.USED,X.PERSON.WEBID</entry> 
+        <entry key="users.colleagueFile">PERSON</entry>
+        <entry key="users.with">WITH LAST.NAME NE '' AND FIRST.NAME NE ''</entry> 
+        <!-- <entry key="users.with">WITH X.PERSON.WEBID NE '' AND LAST.NAME NE '' AND FIRST.NAME NE ''</entry> -->
+        <!-- <entry key="users.with"></entry> -->
+        <entry key="users.header">integration_id,family_name,middle_name,given_name,email,secondary_email,student_id,user_id,gender,birth_dt,company,job_title,h_phone,b_phone,m_phone,available_ind,assign_student_role,allow_login,home_city,home_state,home_zip</entry>
+        <entry key="users.__header">__phone_type,__where,__webid</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="users.override">@users.sql</entry>
+        <entry key="users.extra">--Enter extra logic here</entry>
+        <!-- <entry key="users.template">GET.LIST STARFISH.STUDENT.POPULATION</entry> -->
+        <entry key="users.template">GET.LIST STARFISH.USERS</entry>
+        <entry key="users.testfile">/tmp/users_1.xml</entry>
+        <entry key="users.script"><![CDATA[
+if (typeof gender == 'undefined' || gender == '' ) {
+  gender = 'U';
+}
+home_county = '';
+// var d1 = new Date(birth_dt);
+// birth_dt = ('00'+(d1.getMonth()+1)).slice(-2) + '-' + ('00' + d1.getDate()).slice(-2) + '-' + d1.getFullYear();
+// phones based on faculty or employee
+// TODO, add logic to look for H, B and CELL
+var a = h_phone.split("}}");
+h_phone = a[0];
+a = __where.split("}}");
+assign_student_role='0';
+// Assign the student role only if it was a student
+// Check what we want to do with the phones
+for (i = 0; i < a.length; i++) { 
+    if ( a[i] == 'Student' ) { assign_student_role = '1' } ;
+    if ( a[i] == 'STAFF' ) { 
+          h_phone = '' 
+    } ;
+}
+if ( user_id == '' ) user_id = __webid;
+if ( user_id == '' ) user_id = "ID" + integration_id ;
+var re= /[^\s@]+@[^\s@]+\.[^\s@]+/;
+var re_complex = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+if ( !re.test(email) ) {
+   email = 'fixemail@elcamino.edu';
+}
+]]></entry>
+<!-- TODO
+       CASE WHEN faculty = 1 OR employee = 1 THEN t1.sprtele_phone_area || t1.sprtele_phone_number
+            WHEN student = 1  THEN t1.sprtele_phone_area || t1.sprtele_phone_number
+            ELSE ''
+-->
+
+
+
+        <!-- CRS.CURRENT.STATUS = FIELD(CRS.STATUS,@VM,1);@1 -->
+        <!-- ***************** CONFIGURATION: COURSE CATALOG  ******************** -->
+        <entry key="course_catalog.filename">Course_catalog.txt</entry>
+        <entry key="course_catalog.fields">@ID,CRS.NAME,CRS.SHORT.TITLE,CRS.CIP,CRS.MIN.CRED,CRS.LEVELS,EVAL 'SF_NULL_VALUE',CRS.MIN.CRED,CRS.MAX.CRED,CRS.DESC,CRS.CURRENT.STATUS,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',CRS.CRED.TYPE,CRS.TRANSFER.STATUS</entry> 
+        <!-- <entry key="course_catalog.fields">@ID,CRS.NAME,CRS.SHORT.TITLE,CRS.CIP,CRS.MAX.CRED,EVAL 'X.RESULT = "" ; FOR X.INDEX = 1 TO LEN(CRS.LEVELS); X.RESULT= X.RESULT + " " + X.INDEX ; NEXT X.INDEX ; X.RESULT )',EVAL 'SF_NULL_VALUE',CRS.MIN.CRED,CRS.MAX.CRED,EVAL 'LOWER(LOWER(CRS.DESC))',CRS.CURRENT.STATUS,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE'</entry> -->
+        <!-- <entry key="course_catalog.fields">@ID,CRS.NAME,CRS.SHORT.TITLE,CRS.CIP,CRS.MAX.CRED,EVAL 'UCHANGE(CRS.LEVELS\,"C"\,"MARC")',EVAL 'SF_NULL_VALUE',CRS.MIN.CRED,CRS.MAX.CRED,EVAL 'LOWER(LOWER(CRS.DESC))',CRS.CURRENT.STATUS,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE'</entry>  -->
+        <entry key="course_catalog.colleagueFile">COURSES</entry>
+        <entry key="course_catalog.with"></entry>
+        <entry key="course_catalog.header">integration_id,course_id,course_name,course_cip_code,default_credit_hours,Level,modified_ts,min_credit_hours,max_credit_hours,description,status,catalog_year,org_integration_id</entry> 
+        <entry key="course_catalog.__header">__cred_type,__transfer</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="course_catalog.override">@course_catalog.sql</entry>
+        <entry key="course_catalog.extra">--Enter extra logic here</entry>
+        <entry key="course_catalog.template">GET.LIST STARFISH.COURSES</entry>
+        <entry key="course_catalog.testfile">/tmp/catalog_1.xml</entry>
+        <entry key="course_catalog.script"><![CDATA[
+// need the potential different statuses and logic
+status = 'ACTIVE';
+// Level = Level.substring(0,1);
+Level = '';
+// 00-Developmental
+// 01-100 level
+// 02-200 level
+// 03-300 level
+// 04-400 level
+// 05-Graduate
+// 06-Non-credit
+description = description.replace(/}}/g," ");
+if ( __cred_type != '' ) { 
+  if ( __cred_type == 'D' ) description = description + "<br>Credit Type: Credit Degree Applicable";
+  if ( __cred_type == 'C' ) description = description + "<br>Credit Type: Credit Non Degree applicable";
+  if ( __cred_type == 'N' ) description = description + "<br>Credit Type: Non Credit";
+  if ( __cred_type == 'W' ) description = description + "<br>Credit Type: Waivers/Test do not apply to section enrollments";
+}
+if ( __transfer != '' ) { 
+  if ( __transfer == 'A' ) description = description + "<br>Transfer Status: UC/CSU";
+  if ( __transfer == 'B' ) description = description + "<br>Transfer Status: CSU only";
+  if ( __transfer == 'C' ) description = description + "<br>Transfer Status: Not a transfer course";
+}
+]]></entry>
+
+
+        <!-- ***************** CONFIGURATION: SECTIONS  ******************** -->
+        <entry key="sections.filename">Sections.txt</entry>
+        <entry key="sections.fields">@ID,SEC.CRS.TITLE,SEC.NAME,EVAL 'OCONV(SEC.START.DATE\,"D-YMD[4\,2\,2]")',EVAL 'OCONV(SEC.END.DATE\,"D-YMD[4\,2\,2]")',SEC.TERM,SEC.COURSE,SEC.CRED.TYPE,EVAL 'SF_NULL_VALUE'</entry>
+        <entry key="sections.colleagueFile">COURSE.SECTIONS</entry>
+        <entry key="sections.with"></entry>
+        <entry key="sections.header">integration_id,course_section_name,course_section_id,start_dt,end_dt,term_id,course_integration_id,course_section_delivery,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="sections.override">@sections.sql</entry>
+        <entry key="sections.extra">--Enter extra logic here</entry>
+        <entry key="sections.template">GET.LIST STARFISH.SECTIONS</entry>
+        <entry key="sections.testfile">/tmp/sections_1.xml</entry>
+        <entry key="sections.script"><![CDATA[
+// to_char(end_dt, 'yyyy-MM-dd') end_dt,
+// var d1 = new Date(start_dt);
+// start_dt = ('00'+(d1.getMonth()+1)).slice(-2) + '-' + ('00' + d1.getDate()).slice(-2) + '-' + d1.getFullYear();
+// d1 = new Date(end_dt);
+// end_dt = ('00'+(d1.getMonth()+1)).slice(-2) + '-' + ('00' + d1.getDate()).slice(-2) + '-' + d1.getFullYear();
+// SEC.CRED.TYPE ?
+course_section_delivery = '01';
+// 01 – Face-to-face
+// 02 – Online
+// 03 – Hybrid
+// 99 – Other
+course_section_id = course_section_id + "-" + term_id.replace(/\//g,"");
+]]></entry>
+
+
+        <!-- ***************** CONFIGURATION: ACADEMIC CALENDAR  ******************** -->
+        <entry key="academic_calendar.filename">Academic_calendar.txt</entry>
+        <!-- <entry key="academic_calendar.fields">@ID,TERM.DESC,TERM.START.DATE,TERM.END.DATE,TERM.START.DATE,TERM.END.DATE,TERM.DROP.END.DATE,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE'</entry> -->
+        <entry key="academic_calendar.fields">@ID,TERM.DESC,EVAL 'OCONV(TERM.START.DATE\,"D-YMD[4\,2\,2]")',EVAL 'OCONV(TERM.END.DATE\,"D-YMD[4\,2\,2]")',EVAL 'OCONV(TERM.START.DATE\,"D-YMD[4\,2\,2]")',EVAL 'OCONV(TERM.END.DATE\,"D-YMD[4\,2\,2]")',EVAL 'OCONV(TERM.DROP.END.DATE\,"D-YMD[4\,2\,2]")',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE'</entry>
+        <entry key="academic_calendar.colleagueFile">TERMS</entry>
+        <entry key="academic_calendar.with"></entry>
+        <entry key="academic_calendar.header">term_id,term_name,start_date,end_date,display_start_date,display_end_date,add_drop_date,term_type,parent_term_id,census_date,prereg_start_date,prereg_end_date,reg_start_date,reg_end_date,persistence_relevant,visible,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="academic_calendar.override">@academic_calendar.sql</entry>
+        <entry key="academic_calendar.extra">--Enter extra logic here</entry>
+        <entry key="academic_calendar.template">GET.LIST STARFISH.TERMS</entry>
+        <entry key="academic_calendar.testfile">/tmp/terms_1.xml</entry>
+        <entry key="academic_calendar.script"><![CDATA[
+// Dates converted in colleague now 
+// to_char(end_dt, 'yyyy-MM-dd') end_dt,
+// var d1 = new Date(start_date);
+// start_date = ('00'+(d1.getMonth()+1)).slice(-2) + '-' + ('00' + d1.getDate()).slice(-2) + '-' + d1.getFullYear();
+// d1 = new Date(end_date);
+// end_date = ('00'+(d1.getMonth()+1)).slice(-2) + '-' + ('00' + d1.getDate()).slice(-2) + '-' + d1.getFullYear();
+// By Naomi's request, modify dates in order to help with testing
+// 2015/FA,Fall Semester 2015,2015-08-22,2015-12-11,2015-08-22,2015-12-11,2015-11-13,,,,,,,,,,
+/* Not needed anymore
+if ( term_id == "2015/FA" ) {
+  start_date = "2016-01-01"; 
+  end_date = "2016-05-30";
+  display_start_date = "2016-01-01";
+  display_end_date = "2016-05-30";
+}
+*/
+]]></entry>
+
+
+        <!-- ***************** CONFIGURATION: OUTCOMES  ******************** -->
+        <entry key="outcomes.filename">Course_outcomes.txt</entry>
+        <entry key="outcomes.fields">STC.PERSON.ID,SCS.COURSE.SECTION,SCS.MID.TERM.GRADE1,STC.FINAL.GRADE,STC.CMPL.CRED,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE'</entry>
+        <entry key="outcomes.colleagueFile">STUDENT.ACAD.CRED</entry>
+        <entry key="outcomes.with">WITH SCS.COURSE.SECTION NE '' AND ( SCS.MID.TERM.GRADE1 NE '' OR STC.FINAL.GRADE NE '' )</entry>
+        <!-- For Transfers? WITH STC.SOURCE.DATA NE 'NORMAL REGISTERED COURSE' -->
+        <entry key="outcomes.header">user_integration_id,course_section_integration_id,midterm_grade,final_grade,credit_hours,enrollment_type,pass_fail,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="outcomes.extra">--Enter extra logic here</entry>
+        <entry key="outcomes.template">GET.LIST STARFISH.TRANSCRIPT.HISTORY</entry>
+        <entry key="outcomes.testfile">/tmp/outcomes_1.xml</entry>
+        <entry key="outcomes.script"><![CDATA[
+/* TODO: 
+       CASE WHEN grd_basis in ( {{_letter}} ) THEN 'L'
+            WHEN grd_basis in ( {{_audit}} ) THEN 'AU'
+            WHEN grd_basis in ( {{_passfail}} ) THEN 'PF'
+            ELSE null 
+       END enrollment_type,
+       CASE WHEN final_grd in ( {{_pass}} ) THEN 'P'
+            WHEN final_grd in ( {{_fail}} ) THEN 'F'
+            ELSE null 
+       END pass_fail,
+*/
+]]></entry>
+
+        <!-- ***************** CONFIGURATION: TEACHING  ******************** -->
+        <entry key="teaching.filename">Teaching.txt</entry>
+        <entry key="teaching.fields">CSF.COURSE.SECTION,CSF.FACULTY,EVAL 'Instructor', EVAL '1', EVAL 'SF_NULL_VALUE', EVAL 'SF_NULL_VALUE'</entry>
+        <entry key="teaching.colleagueFile">COURSE.SEC.FACULTY</entry>
+        <entry key="teaching.with">WITH CSF.COURSE.SECTION NE '' AND CSF.FACULTY NE ''</entry>
+        <!-- <entry key="teaching.header">course_section_integration_id,user_integration_id,user_role,available_ind,credit_hours,last_accessed_date,authoritative_status,modified_ts</entry> -->
+        <entry key="teaching.header">course_section_integration_id,user_integration_id,user_role,available_ind,last_access_date,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="teaching.extra">--Enter extra logic here</entry>
+        <entry key="teaching.template">GET.LIST STARFISH.TEACHING</entry>
+        <entry key="teaching.testfile">/tmp/teaching_1.xml</entry>
+        <entry key="teaching.script"><![CDATA[
+]]></entry>
+
+       
+        <!-- ***************** CONFIGURATION: ATTRIBUTES  ******************** -->
+        <entry key="attributes.filename">Attributes.txt</entry>
+        <entry key="attributes.fields">@ID,EVAL 'AttributeNAME',EVAL 'AttributeVALUE', EVAL 'SF_NULL_VALUE', X.STU.STANDING, X.STU.VETERAN, EVAL 'SUBR("CC.VALCODE.DESC"\,"ST"\,X.STU.STANDING\,"ACAD.STANDINGS")', EVAL 'SUBR("CC.VALCODE.DESC"\,"CORE"\,X.STU.VETERAN\,"VETERAN.TYPES")',X.CUM.DEGREE.UNITS,X.RT.RA.ACTIVE.MAJOR,STU.MISC3,STU.MISC4,X.STU.ECCCOM.COHORT</entry>
+        <entry key="attributes.header">user_integration_id,attribute_key,attribute_value,modified_ts</entry>
+        <entry key="attributes.__header">ACADSTANDINGCODE,VETERANCODE,ACADSTANDING,VETERAN,UNITS_COMPLETED,MAJOR,ORIENTATION_COMPL,ED_PLAN_COMPL,APPLICATION_LOC</entry>
+        <entry key="attributes.colleagueFile">STUDENTS</entry>
+        <entry key="attributes.with"></entry>
+           <!-- EOPS and PROBATION? -->
+        <entry key="attributes.class">com.starfish.sisintegration.AttributesFileGenerator</entry>
+        <!-- [DO NOT CHANGE] The main query for the attributes file. Change each of the individual queries for the attributes -->
+        <entry key="attributes.template">GET.LIST STARFISH.STUDENT.POPULATION</entry>
+        <entry key="attributes.testfile">/tmp/attributes_1.xml</entry>
+        <entry key="attributes.script"><![CDATA[
+// Blank codes that we don't want to send and are used only to filter
+ACADSTANDINGCODE='';
+VETERANCODE='';
+if (ORIENTATION_COMPL == 'IOM') { 
+    ORIENTATION_COMPL = 'Yes'; 
+} else {
+    ORIENTATION_COMPL = 'No' ;
+}
+if (ED_PLAN_COMPL == 'IEM') { 
+    ED_PLAN_COMPL = 'Yes';
+} else {
+    ED_PLAN_COMPL = 'No'; 
+}
+if (APPLICATION_LOC == 'EL') APPLICATION_LOC = 'El Camino';
+if (APPLICATION_LOC == 'CO') APPLICATION_LOC = 'Compton';
+]]></entry>
+
+<!-- Relationships based on the PERSON file out of the STARFISH.USERS, changing it to Cohorts 
+ what do we want to do for orgs?
+SELECT STUDENT.ACAD.LEVELS WITH STA.CURRENT.OTHER.COHORS = 'ATHL' 'CACW' 'FYE' 'VETS' 'VET2' 'EOPS' 'COME'
+.. should I use this for the orgs??
+STA.START.TERM
+STA.TERMS
+-->
+        <entry key="relationships.filename">Relationships.txt</entry>
+        <entry key="relationships.fields">@ID,GROUPS,EVAL 'allStudents',EVAL 'Student',EVAL 'OnGoing'</entry>
+        <entry key="relationships.colleagueFile">PERSON</entry>
+        <entry key="relationships.with">WHEN GROUPS = "Academic Division Support" "Academic Leadership" "Academic Support Programs" "Counselor" "DSPS Counselor" "General Advisor" "Retention Coordinator" "Student Service Support" "Student Services Leadership" "Student Services Support" "Tenant Admin" AND LAST.NAME NE '' AND FIRST.NAME NE '' BY.EXP GROUPS</entry> 
+        <entry key="relationships.header">parent_integration_id,parent_role,child_id,child_role,term_id</entry>
+        <entry key="relationships.template">GET.LIST STARFISH.USERS</entry>
+        <entry key="relationships.testfile">/tmp/relationships_1.xml</entry>
+        <entry key="relationships.script"><![CDATA[
+]]></entry>
+
+        <entry key="scores.filename">Student_test_results.txt</entry>
+        <entry key="scores.fields">STNC.PERSON.ID,STNC.NON.COURSE,STNC.SCORE,EVAL 'SF_NULL_VALUE',STNC.START.DATE,STNC.GRADE,STNC.USER1,STNC.USER2,STNC.USER3,STNC.USER4,STNC.USER5,STNC.USER6,STNC.USER7,STNC.USER8,STNC.USER9,STNC.USER10</entry>
+        <entry key="scores.colleagueFile">STUDENT.NON.COURSES</entry>
+        <entry key="scores.with">WITH STNC.SCORE NE "" OR STNC.GRADE NE ""</entry>
+        <entry key="scores.header">student_integration_id,test_id,numeric_score,score_string,date_taken</entry>
+        <entry key="scores.__header">__grade,__user1,__user2,__user3,__user4,__user5,__user6,__user7,__user8,__user9,__user10</entry>
+        <entry key="scores.template">GET.LIST STARFISH.TESTSCORES</entry>
+        <entry key="scores.testfile">/tmp/scores_1.xml</entry>
+<!-- Need to format date
+     Example: 08/15/2015 -->
+        <entry key="scores.script"><![CDATA[
+if ( numeric_score == '' ) { 
+score_string = __grade;
+}
+]]></entry>
+
+
+<!-- TODO: Equivalencies
+course_integration_id
+course_equivalent_number
+start_catalog_year
+end_catalog_year
+institution_code
+-->
+
+
+<!-- Transfers
+ag_grading_type
+•	The type of grade assigned to the student for the enrollment.
+•	Must be one of the following accepted values: 
+o	LETTER
+o	NUMERIC
+o	P/F
+o	NONCRED
+o	INPROG
+o	UNKNOWN
+o	LAB
+ag_status
+•	The status of the student’s enrollment.
+•	Must be one of the following accepted values: 
+o	INPROGRESS
+o	PREREGISTER
+o	REGISTERED
+o	COMPLETED
+o	INCOMPLETE
+o	DROPPED
+o	TRANSFER
+o	WAIVER
+o	NONE
+term_year
+•	Enter a 4-digit numeric value indicating the year in which the student was enrolled in the course. 
+•	If NULL, the section enrollment and credits earned will default to “Transfer.”
+•	Example: 2014
+term_season
+•	Enter a string indicating the semester type of the term in which the student was enrolled in the course.
+•	If NULL, the section enrollment and credits earned will default to “Transfer.”
+•	Example: Fall
+-->
+        <!-- ***************** CONFIGURATION: TRANSFERS  ******************** -->
+        <entry key="transfers.filename">Student_transfer_record.txt</entry>
+        <!-- <entry key="transfers.fields">STC.PERSON.ID,SCS.COURSE.SECTION,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE'</entry> -->
+        <entry key="transfers.fields">STC.PERSON.ID,SCS.COURSE.SECTION,STC.COURSE,EVAL 'SF_NULL_VALUE',STC.CURRENT.STATUS,STC.CRED,SCS.COURSE.SECTION,STC.COURSE,STC.TITLE,STC.TERM,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',STC.FINAL.GRADE,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',STC.FACULTY,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE',STC.SORT.FAC.FIRST.NAME,STC.SORT.FAC.LAST.NAME</entry>
+        <entry key="transfers.colleagueFile">STUDENT.ACAD.CRED</entry>
+        <entry key="transfers.with">WITH SCS.COURSE.SECTION NE '' AND ( SCS.MID.TERM.GRADE1 NE '' OR STC.FINAL.GRADE NE '' ) AND STC.SOURCE.DATA NE 'NORMAL REGISTERED COURSE'</entry>
+        <entry key="transfers.header">student_integration_id,transfer_course_section_number,transfer_course_number,ag_grading_type,ag_status,credits,course_section_integration_id,course_integration_id,course_title,term_year,term_season,display_grading_type,display_grade,display_status,institution_code,Instructor_name,instructor_id,pseudo_identifier,pseudo_exception_identifier</entry>
+        <entry key="transfers.__header">__fac_first_name,__fac_last_name</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="transfers.extra">--Enter extra logic here</entry>
+        <entry key="transfers.template">GET.LIST STARFISH.TRANSCRIPT.HISTORY</entry>
+        <entry key="transfers.testfile">/tmp/transfers_1.xml</entry>
+        <entry key="transfers.script"><![CDATA[
+if ( __fac_first_name ) {
+   var a = __fac_first_name.split("}}");
+   var b = __fac_last_name.split("}}");
+   var c = Instructor_name.split("}}");
+   Instructor_name = a[0] + ' ' + b[0];
+   instructor_id = c[0];
+}
+// Not sure what code to use for Completed, since we are only pulling A,N and D from AcadCred
+if ( ag_status == 'A' ) {
+     ag_status = 'INPROGRESS';
+}
+if ( ag_status == 'N' ) {
+     ag_status = 'INPROGRESS';
+}
+if ( ag_status == 'D' ) {
+     ag_status = 'DROPPED';
+}
+if ( term_year ) {
+   var d = term_year.split("/");
+   term_year = d[0];
+   if ( d[1] == 'FA' ) term_season = 'Fall'; 
+   if ( d[1] == 'SP' ) term_season = 'Spring'; 
+   if ( d[1] == 'SU' ) term_season = 'Summer'; 
+   if ( d[1] == 'WI' ) term_season = 'Winter'; 
+}
+/* TODO: 
+       CASE WHEN grd_basis in ( {{_letter}} ) THEN 'L'
+            WHEN grd_basis in ( {{_audit}} ) THEN 'AU'
+            WHEN grd_basis in ( {{_passfail}} ) THEN 'PF'
+            ELSE null 
+       END enrollment_type,
+       CASE WHEN final_grd in ( {{_pass}} ) THEN 'P'
+            WHEN final_grd in ( {{_fail}} ) THEN 'F'
+            ELSE null 
+       END pass_fail,
+*/
+]]></entry>
+
+
+
+        <!-- ***************** CONFIGURATION: ORGANIZATION MEMBERSHIP  ******************** -->
+        <entry key="orgmembership.filename">Orgmembership.txt</entry>
+        <entry key="orgmembership.fields">STA.OTHER.COHORT.GROUPS,STA.STUDENT,EVAL 'STUDENT',EVAL '1',STA.OTHER.COHORT.START.DATES,STA.OTHER.COHORT.END.DATES,EVAL 'SF_NULL_VALUE',EVAL 'SF_NULL_VALUE'</entry>  
+        <entry key="orgmembership.colleagueFile">STUDENT.ACAD.LEVELS</entry>
+        <entry key="orgmembership.with">WHEN STA.CURRENT.OTHER.COHORTS NE '' BY.EXP STA.OTHER.COHORT.GROUPS</entry>
+        <entry key="orgmembership.header">organization_integration_id,user_integration_id,user_role,available_ind,start_date,end_date,last_access_date,modified_ts</entry>
+        <entry key="orgmembership.template">GET.LIST STARFISH.ACAD.LEVELS</entry>
+        <entry key="orgmembership.testfile">/tmp/orgmemberships_1.xml</entry>
+        <entry key="orgmembership.script"><![CDATA[
+// Logic used to format the date, but dates may not be needed at this point
+if ( start_date != '' ) {
+   var a = start_date.split("/");
+   if ( a[2] > 90 ) a[2] = '19' + a[2];
+               else a[2] = '20' + a[2];
+   var d = new Date(a[2], a[0], a[1]);
+   start_date = d.getFullYear() + "-" + ( '00' + d.getMonth() ).slice(-2) + "-" + ('00' + d.getDate()).slice(-2);  
+   var c = new Date()
+   if ( c < d ) available_ind = '0';
+}
+if ( end_date != '' ) {
+   var a = end_date.split("/");
+   if ( a[2] > 90 ) a[2] = '19' + a[2];
+               else a[2] = '20' + a[2];
+   var d = new Date(a[2], a[0], a[1]);
+   end_date = d.getFullYear() + "-" + ( '00' + d.getMonth() ).slice(-2) + "-" + ('00' + d.getDate()).slice(-2);  
+   var c = new Date()
+   if ( c > d ) available_ind = '0';
+}
+start_date = '';
+end_date = '';
+]]></entry>
+
+        <!-- ***************** CONFIGURATION: ORGANIZATION ******************** -->
+        <entry key="organizations.filename">Organizations.txt</entry>
+        <entry key="organizations.fields">VAL.INTERNAL.CODE, VAL.EXTERNAL.REPRESENTATION, VAL.INTERNAL.CODE, EVAL 'SF_NULL_VALUE', EVAL 'SF_NULL_VALUE', EVAL 'SF_NULL_VALUE', EVAL 'OnGoing'</entry>
+        <entry key="organizations.colleagueFile">ST.VALCODES</entry>
+        <entry key="organizations.with">BY.EXP VAL.INTERNAL.CODE</entry>
+        <entry key="organizations.header">integration_id,organization_name,organization_id,start_dt,end_dt,modified_ts,term_id</entry>
+        <entry key="organizations.template">GET.LIST STARFISH.ORGANIZATIONS</entry>
+        <entry key="organizations.testfile">/tmp/organizations_1.xml</entry>
+        <entry key="organizations.script"><![CDATA[
+]]></entry>
+
+        <!-- ***************** CONFIGURATION: REQUIREMENT COURSE SETS  ******************** -->
+        <entry key="requirement_course_sets.filename">Requirement_course_sets.txt</entry>
+        <entry key="requirement_course_sets.header">course_integration_id,catalog_year,set_abbreviation,set_title,suggested</entry>
+        <entry key="requirement_course_sets.__header">__credtype</entry>
+        <entry key="requirement_course_sets.fields">@ID, EVAL 'SF_NULL_VALUE', EVAL 'DA', EVAL 'Degree_Applicable', EVAL 'YES', CRS.CRED.TYPE</entry>
+        <entry key="requirement_course_sets.colleagueFile">COURSES</entry> 
+        <entry key="requirement_course_sets.with">WITH CRS.CRED.TYPE EQ 'D'</entry>
+        <entry key="requirement_course_sets.template">GET.LIST STARFISH.COURSES</entry>
+        <entry key="requirement_course_sets.testfile">/tmp/da_1.xml</entry>
+        <entry key="requirement_course_sets.script"> <![CDATA[
+set_title='Degree Applicable';
+]]></entry>
+
+
+
+        <!-- ***************** CONFIGURATION: DEMOGRAPHICS  ******************** -->
+        <entry key="demographics.filename">demographics.txt</entry>
+        <entry key="demographics.term_based">0</entry>
+        <entry key="demographics.distinct_terms">select distinct term_id from sfish_st_transcript</entry>
+        <entry key="demographics.current_term"></entry>
+        <entry key="demographics.fields">user_integration_id,pell_grant_eligible,race_ethnicity,gender,first_generation_student,educational_outreach_programs,residency_type,us_citizenship_status,visa_type,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="demographics.override">@demographics.sql</entry>
+        <entry key="demographics.extra">--Enter extra logic here</entry>
+        <entry key="demographics.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="demographics.template">
+<![CDATA[
+  SELECT A.spbpers_pidm user_integration_id,
+         CASE WHEN EXISTS 
+                   (SELECT b.rcresar_pidm, 
+                           b.rcresar_pell_elgbl
+                      FROM rcresar b
+                     WHERE b.rcresar_pidm = a.spbpers_pidm
+                       AND b.rcresar_pell_elgbl = 'Y'
+                       AND b.rcresar_aidy_code = (SELECT MAX(bb.stvterm_fa_proc_yr)
+                                                    FROM stvterm bb
+                                                   WHERE SYSDATE BETWEEN bb.stvterm_start_date AND bb.stvterm_end_date) )
+              THEN 'Y'
+              ELSE 'N'
+              END pell_grant_eligible,
+         CASE WHEN a.spbpers_ethn_code = 'N' THEN 'AI'
+              WHEN a.spbpers_ethn_code = 'A' THEN 'AS NH'
+              WHEN a.spbpers_ethn_code = 'B' THEN 'BL'
+              WHEN a.spbpers_ethn_code = 'H' THEN 'HI'
+              WHEN a.spbpers_ethn_code = 'W' THEN 'WH'
+              ELSE NULL
+              END race_ethnicity,
+         CASE WHEN a.spbpers_sex IN ('M','F') THEN a.spbpers_sex
+              ELSE 'U'
+              END gender,
+         NULL first_generation_student, 
+         NULL educational_outreach_programs, 
+         NULL residency_type, 
+         CASE WHEN a.spbpers_citz_code = 'Y' THEN '01'
+              WHEN EXISTS 
+                   (SELECT e.gorvisa_pidm
+                      FROM gorvisa e
+                     WHERE e.gorvisa_pidm = a.spbpers_pidm
+                       AND e.gorvisa_vtyp_code = 'PR'
+                       AND (SYSDATE >= e.gorvisa_visa_start_date OR e.gorvisa_visa_start_date IS NULL)
+                       AND (SYSDATE <= e.gorvisa_visa_expire_date OR e.gorvisa_visa_expire_date IS NULL)
+                       AND e.gorvisa_seq_no = (SELECT MAX(ee.gorvisa_seq_no)
+                                                 FROM gorvisa ee
+                                                WHERE e.gorvisa_pidm = ee.gorvisa_pidm)) THEN '02'
+              ELSE NULL
+              END us_citizenship_status,
+         (SELECT CASE WHEN a.spbpers_citz_code = 'Y'
+                                   OR f.gorvisa_vtyp_code = 'PR' THEN NULL
+                    WHEN f.gorvisa_vtyp_code IN ('F1','M1','H1','B1','B2','J1') THEN f.gorvisa_vtyp_code
+                    ELSE 'OV'
+                 END
+            FROM gorvisa f
+           WHERE f.gorvisa_pidm = a.spbpers_pidm
+             AND (SYSDATE >= f.gorvisa_visa_start_date  OR f.gorvisa_visa_start_date IS NULL)
+             AND (SYSDATE <= f.gorvisa_visa_expire_date OR f.gorvisa_visa_expire_date IS NULL)
+             AND f.gorvisa_seq_no = (SELECT MAX(ff.gorvisa_seq_no)
+                                       FROM gorvisa ff
+                                      WHERE f.gorvisa_pidm = ff.gorvisa_pidm)
+         ) visa_type,
+         null modified_ts
+      from sf_spbpers a, ( select person_uid from sfish_users where student = 1 )
+     where spbpers_pidm = person_uid
+     order by 1
+]]>
+        </entry>
+
+
+        <!-- ***************** CONFIGURATION: ATTENDANCE  ******************** -->
+        <entry key="attendance.filename">Attendance.txt</entry>
+        <entry key="attendance.term_based">1</entry>
+        <entry key="attendance.distinct_terms">select distinct term_id from sfish_st_transcript</entry>
+        <entry key="attendance.current_term"></entry>
+        <!-- need to move this to cusstom for the class -->
+        <entry key="attendance.fields">user_integration_id,course_section_integration_id,meeting_date,attendance_status,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="attendance.override">@attendance.sql</entry>
+        <entry key="attendance.extra">--Enter extra logic here</entry>
+        <entry key="attendance.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="attendance.template">
+<![CDATA[
+select 's' + a.student_uid user_integration_id,
+       section_uid + '.' + term_id course_section_integration_id,
+       replace(convert(varchar(20), SADate, 111),'/','-') meeting_date,
+/*
+1049	1037	1	Absent	Student was absent from class
+1050	1037	3	Late	Student was late
+1051	1037	7	Tardy	Student was tardy
+1052	1037	2	Excused	Student was excused
+1053	1037	4	Left Early	Student left early
+1054	1037	6	Present	Student was present
+1055	1037	5	Other	See comment for explaination
+*/
+       CASE StatusID WHEN 1049 THEN 'ABSENT'
+                     WHEN 1050 THEN 'TARDY'
+                     WHEN 1051 THEN 'TARDY'
+                     WHEN 1052 THEN 'EXCUSED'
+                     WHEN 1053 THEN 'PRESENT'  
+                     WHEN 1054 THEN 'PRESENT'
+       /* ignored
+                     WHEN 1055 THEN 'ABSENT' -- Need confirmation
+       ELSE 'PRESENT'                        -- Need confirmation
+       */
+       END attendance_status,
+       null modified_ts
+  from sfish_st_transcript a,
+       StudentAttendance b {{extra_tables}}
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+   and a.student_uid = b.StudentUID
+   and a.section_uid = b.SROfferID
+   and a.term_id = b.TermCalendarID
+   and StatusID in (1049,1050,1051,1052,1053,1054)
+    {{extra}}
+ order by 1,2,3
+]]>
+        </entry>
+
+
+
+<!-- ADD logic to remove the 'recommended' from the list of courses in the prereqs -->
+<!-- 
+File ACAD.REQMTS 
+ - Field ACR.REQS.ENFORCEMENT contains RM for RECOMMENDED and RQ for REQUIRED.
+ - Field ACR.REQS.TIMING contains P for Previous, C for Concurrent and E for Either.
+If it states RQ and C, then it is a COREQUISITE (REQUIRED CONCURRENT). If it states RQ and P, then it is a PREREQUISITE (REQUIRED PREVIOUS). RQ and E can make it a PREREQUISITE or COREQUISITE depending on when they take the course (PREVIOUS or CONCURRENT). 
+-->
+        <!-- ***************** CONFIGURATION: PREREQUISITES  ******************** -->
+        <entry key="prerequisites.filename">pre_Prereqs.txt</entry>
+        <entry key="prerequisites.class">com.starfish.sisintegration.RequisitesFileGenerator</entry>
+        <entry key="prerequisites.colleagueFile">ACAD.REQMTS</entry>
+        <!-- <entry key="prerequisites.with">WITH ACR.TOP.REQMT.BLOCK NE "" AND ACR.REQS.ENFORCEMENT EQ "RQ" AND ACR.REQS.TIMING EQ "P" </entry> -->
+        <entry key="prerequisites.with">WITH ACR.TOP.REQMT.BLOCK NE ""</entry>
+        <entry key="prerequisites.fields">@ID,ACR.PREREQ.COURSE,EVAL 'course',EVAL 'prereq_value',EVAL 'and_id',EVAL 'or_id',EVAL 'prereq_test_id',EVAL 'prereq_operator',EVAL 'SF_NULL_VALUE',EVAL 'min_grade',ACR.TOP.REQMT.BLOCK,EVAL 'TRANS("ACAD.REQMT.BLOCKS"\,ACR.TOP.REQMT.BLOCK\,ACRB.COURSES\,"X")',EVAL 'TRANS("ACAD.REQMT.BLOCKS"\,ACR.TOP.REQMT.BLOCK\,ACRB.FROM.COURSES\,"X")',EVAL 'TRANS("ACAD.REQMT.BLOCKS"\,ACR.TOP.REQMT.BLOCK\,ACRB.SUBBLOCKS\,"X")'</entry>
+	<entry key="prerequisites.header">prereq_id,course_integration_id,prereq_type,prereq_value,and_id,or_id,prereq_test_id,prereq_operator,prereq_concurrent_flag,min_grade</entry>
+        <entry key="prerequisites.__header">__top,__listone,__listtwo,__listthree</entry>
+        <!-- Use custom writer... it needs to query from courses, then for each course from requirements, and then for each rerequiment from blocks, it may not be necessary to add it to the configuration and have it all in the java code, but if we need to add parameters, it may be easier this way eventually -->
+        <entry key="prerequisites.courses"></entry>
+        <entry key="prerequisites.requirements"></entry>
+        <entry key="prerequisites.requirements_blocks"></entry>
+        <entry key="prerequisites.testfile">/tmp/prereqs_1.xml</entry>
+        <entry key="prerequisites.template">GET.LIST STARFISH.PREREQS</entry>
+        <entry key="prerequisites.script"> <![CDATA[
+prereq_concurrent_flag='N';
+]]></entry>
+
+        <!-- ***************** CONFIGURATION: COREQUISITES  ******************** -->
+        <entry key="corequisites.filename">co_Prereqs.txt</entry>
+        <entry key="corequisites.class">com.starfish.sisintegration.RequisitesFileGenerator</entry>
+        <entry key="corequisites.colleagueFile">ACAD.REQMTS</entry>
+        <!-- <entry key="corequisites.with">WITH ACR.TOP.REQMT.BLOCK NE "" AND ACR.REQS.ENFORCEMENT EQ "RQ" AND ACR.REQS.TIMING EQ "C" </entry> -->
+        <entry key="corequisites.with">WITH ACR.TOP.REQMT.BLOCK NE ""</entry>
+        <entry key="corequisites.fields">@ID,ACR.PREREQ.COURSE,EVAL 'course',EVAL 'prereq_value',EVAL 'and_id',EVAL 'or_id',EVAL 'prereq_test_id',EVAL 'prereq_operator',EVAL 'SF_NULL_VALUE',EVAL 'min_grade',ACR.TOP.REQMT.BLOCK,EVAL 'TRANS("ACAD.REQMT.BLOCKS"\,ACR.TOP.REQMT.BLOCK\,ACRB.COURSES\,"X")',EVAL 'TRANS("ACAD.REQMT.BLOCKS"\,ACR.TOP.REQMT.BLOCK\,ACRB.FROM.COURSES\,"X")',EVAL 'TRANS("ACAD.REQMT.BLOCKS"\,ACR.TOP.REQMT.BLOCK\,ACRB.SUBBLOCKS\,"X")',ACR.REQS.ENFORCEMENT,ACR.REQS.TIMING</entry>
+        <entry key="corequisites.header">prereq_id,course_integration_id,prereq_type,prereq_value,and_id,or_id,prereq_test_id,prereq_operator,prereq_concurrent_flag,min_grade</entry>
+        <entry key="corequisites.__header">__top,__listone,__listtwo,__listthree,__enforcement,__timing</entry>
+        <!-- Use custom writer... it needs to query from courses, then for each course from requirements, and then for each rerequiment from blocks, it may not be necessary to add it to the configuration and have it all in the java code, but if we need to add parameters, it may be easier this way eventually -->
+        <entry key="corequisites.courses"></entry>
+        <entry key="corequisites.requirements"></entry>
+        <entry key="corequisites.requirements_blocks"></entry>
+        <entry key="corequisites.testfile">/tmp/coreqs_1.xml</entry>
+        <entry key="corequisites.template">GET.LIST STARFISH.PREREQS</entry>
+        <entry key="corequisites.script"> <![CDATA[
+prereq_concurrent_flag='Y';
+]]></entry>
+
+        <!-- ***************** CONFIGURATION: CONCURRENT  ******************** -->
+        <entry key="concurrent.filename">cn_Prereqs.txt</entry>
+        <entry key="concurrent.class">com.starfish.sisintegration.RequisitesFileGenerator</entry>
+        <entry key="concurrent.colleagueFile">ACAD.REQMTS</entry>
+        <entry key="concurrent.with">WITH ACR.TOP.REQMT.BLOCK NE "" AND ACR.REQS.ENFORCEMENT EQ "RQ" AND ACR.REQS.TIMING EQ "E" </entry>
+        <entry key="concurrent.fields">@ID,ACR.PREREQ.COURSE,EVAL 'course',EVAL 'prereq_value',EVAL 'and_id',EVAL 'or_id',EVAL 'prereq_test_id',EVAL 'prereq_operator',EVAL 'SF_NULL_VALUE',EVAL 'min_grade',ACR.TOP.REQMT.BLOCK,EVAL 'TRANS("ACAD.REQMT.BLOCKS"\,ACR.TOP.REQMT.BLOCK\,ACRB.COURSES\,"X")',EVAL 'TRANS("ACAD.REQMT.BLOCKS"\,ACR.TOP.REQMT.BLOCK\,ACRB.FROM.COURSES\,"X")',EVAL 'TRANS("ACAD.REQMT.BLOCKS"\,ACR.TOP.REQMT.BLOCK\,ACRB.SUBBLOCKS\,"X")'</entry>
+        <entry key="concurrent.header">prereq_id,course_integration_id,prereq_type,prereq_value,and_id,or_id,prereq_test_id,prereq_operator,prereq_concurrent_flag,min_grade</entry>
+        <entry key="concurrent.__header">__top,__listone,__listtwo,__listthree</entry>
+        <!-- Use custom writer... it needs to query from courses, then for each course from requirements, and then for each rerequiment from blocks, it may not be necessary to add it to the configuration and have it all in the java code, but if we need to add parameters, it may be easier this way eventually -->
+        <entry key="concurrent.courses"></entry>
+        <entry key="concurrent.requirements"></entry>
+        <entry key="concurrent.requirements_blocks"></entry>
+        <entry key="concurrent.testfile">/tmp/cnreqs_1.xml</entry>
+        <entry key="concurrent.script"> <![CDATA[
+prereq_concurrent_flag='Y';
+]]></entry>
+
+
+</properties>

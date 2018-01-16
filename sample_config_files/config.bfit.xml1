@@ -1,0 +1,1036 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<!-- *************** Extra configuration for SIS Integration package ***************** -->
+
+        <!-- ***************** CONNECTION VALIDATION ******************** -->
+        <!-- [CHANGE] Set the JDBC driver and connection string to connect to your SIS -->
+        <entry key="DBDriver">com.microsoft.sqlserver.jdbc.SQLServerDriver</entry>
+        <entry key="DBConnection">jdbc:sqlserver://CARNEGIE\CAMS;databaseName=CAMS_Enterprise</entry>
+        <!-- 
+        <entry key="DBDriver">net.sourceforge.jtds.jdbc.Driver</entry>
+        <entry key="DBConnection">jdbc:jtds:sqlserver://CARNEGIE;instance=CAMS;databaseName=CAMS_Enterprise</entry>
+        -->
+
+        <!-- [CHANGE] Enter username and password to your database. Run the integration with the -encrypt command in order to get a an encrypted password and replace the plain text password for the encrypted version -->
+        <entry key="DBUsername">camsAdHoc</entry>
+        <!-- Test <entry key="DBPassword">YBKE6SLD+PrDX3eg3MdXg/IjmuT/q7ZVjIw1pG+J+4s=</entry> -->
+        <entry key="DBPassword">rIuay33NG20zuqqPGd3i3NCMr+ixx64IcQWfHG/pHRQ=</entry>
+
+        <!-- [DO NOT CHANGE] Set of commands used to validate that the connection is properly set. This piece is dependent on the SIS used, and can be changed if needed, but should not need to be changed -->
+        <entry key="ValidateConnection">
+<![CDATA[
+SELECT getdate() 
+]]>
+        </entry>
+
+        <!-- ***************** SCHEDULING *************************** -->
+        <!-- [CHANGE] String used to configure the scheduling of the extracts -->
+        <!-- Using Quartz: http://quartz-scheduler.org/documentation/quartz-2.1.x/examples/Example3 -->
+        <!-- Example below is daily monday to friday at 3am -->
+        <entry key="Schedule">0 0 3 ?  * MON,TUE,WED,THU,FRI</entry>
+        <!-- Every hour at xx:15 and xx:45 -->
+        <!-- <entry key="Schedule">0 15,45 * ?  * MON,TUE,WED,THU,FRI</entry> -->
+
+        <!-- ***************** ACCESS VALIDATION ******************** -->
+        <!-- [DO NOT CHANGE] The following script is used to validate access to the right set of tables. It's different for each SIS and there should not be any need to change it -->
+        <entry key="ValidateAccess">
+<![CDATA[
+create table #sf_validate(id int);
+insert into #sf_validate values (1);
+select count(*) from #sf_validate;
+drop table #sf_validate;
+select count(*) from dbo.Student;
+select count(*) from dbo.TermCalendar;
+]]>
+        </entry>
+
+        <!-- ***************** TEMPORARY TABLES ******************** -->
+        <entry key="CreateTemporaryTables">#sfish_student_transcript_summary,#sfish_course_section_summary,#sfish_faculty_summary,#sfish_users_summary,#sfish_terms</entry>
+
+        <!-- [CONFIGURE] Use the configuration items for each temporary table in order to configure the creation of the temporary tables. -->
+        <!--             The code can be edited based on your particular school requirements, but it's preferred to use configuration items rather than changing the actual queries -->
+        <!--             Configuration items are shown as {{parameter}} in the queries below, and are configured using an entry key named TEMPORARYTABLE.PARAMETER -->
+        <entry key="#sfish_student_transcript_summary.future_days">120</entry>
+        <entry key="#sfish_student_transcript_summary.past_days">1440</entry>
+        <entry key="CreateTemporary.#sfish_student_transcript_summary">
+<![CDATA[
+begin try
+  drop table #sfish_student_transcript_summary;
+end try
+begin catch
+end catch
+
+    create table #sfish_student_transcript_summary(student_uid varchar(100),
+                                                   section_uid varchar(100),
+                                                   course_uid varchar(100),
+                                                   term_id varchar(100),
+                                                   att_cred int,
+                                                   earn_cred int,
+                                                   enrl_status int,
+                                                   midterm_grd varchar(100),
+                                                   final_grd varchar(100),
+                                                   grd_basis varchar(100));
+
+/* enrl_status
+-	01 –Active 
+-	02 – Dropped
+-	03 –Withdrawn
+-	04 – Completed 
+-	05 – Incomplete
+-	06 – Deleted/Dropped with no penalty
+*/
+      -- Insert Academics
+      insert into #sfish_student_transcript_summary
+                                    select a.StudentUID,
+                                           SROfferID,
+                                           CourseID,
+                                           TermCalendarID,
+                                           Credits,
+                                           Credits,
+                                           -- Use CASE on the grades for Withdrawals or completes
+                                           CASE WHEN Grade IN ('','-') THEN '1' -- In progress
+                                                WHEN Grade IN ('W','WF','WP') THEN '3' -- Withdrawn
+                                                WHEN Grade IN ('I') THEN '5' -- Incomplete
+                                           ELSE '1' -- In-Progress, to mean completed
+                                           END,
+                                           MidTermGrade,
+                                           Grade,
+                                           null GradeMod
+                                      from SRAcademic a, Student b
+                                     where TermCalendarID IN ( select TermCalendarID
+                                                                 from TermCalendar
+                                                                where ( TermStartDate between getdate()-{{past_days}} and getdate()+{{future_days}}
+                                                                       or TermEndDate between getdate()-{{past_days}} and getdate()+{{future_days}} )
+                                                                  and ActiveFlag = 1
+                                                                  and DisplayInStudentPortal = 1 )
+                                       -- and RegistrationStatus = 'Official'
+                                       and SROfferID is not null
+                                       and Department != 'BFIT'
+                                       and substring(Department,1,1) != '.'
+                                       -- Student 204 does not have a name, so let's check here
+                                       and a.StudentUID = b.StudentUID
+                                       and b.FirstName is not null and ltrim(rtrim(b.FirstName)) != ''
+                                       and b.LastName is not null and ltrim(rtrim(b.FirstName)) != '';
+
+
+      -- Insert Enrollments
+      insert into #sfish_student_transcript_summary
+                                    select a.StudentUID,
+                                           b.SROfferID,
+                                           b.CourseID,
+                                           a.TermCalendarID,
+                                           b.Credits,
+                                           null,
+                                           '01', 
+                                           null,
+                                           null,
+                                           null GradeMod
+                                      from SROfferEnrollment a, SROffer b, Student c
+                                     where a.TermCalendarID IN ( select TermCalendarID
+                                                                   from TermCalendar
+                                                                  where ( TermStartDate between getdate()-{{past_days}} and getdate()+{{future_days}}
+                                                                         or TermEndDate between getdate()-{{past_days}} and getdate()+{{future_days}} )
+                                                                    and ActiveFlag = 1
+                                                                    and DisplayInStudentPortal = 1 )
+                                       and Pending = 0
+                                       and AffectEnrolled = 1
+                                       and a.SROfferID = b.SROfferID
+                                       and b.Department != 'BFIT'
+                                       and substring(b.Department,1,1) != '.'
+                                       and not exists ( select 'Y' from SROfferEnrollment d
+                                                         where a.StudentUID = d.StudentUID
+                                                           and a.TermCalendarID = d.TermCalendarID
+                                                           and a.SROfferID = d.SROfferID
+                                                           and d.Pending = 0
+                                                           and d.AffectEnrolled = -1
+                                                           and d.ReservationBooked >= a.ReservationExpires
+                                                      )             
+                                       and not exists ( select 'Y' from SRAcademic b
+                                                         where a.StudentUID = b.StudentUID
+                                                           and a.TermCalendarID = b.TermCalendarID
+                                                           and a.SROfferID = b.SROfferID
+                                                           -- and b.RegistrationStatus = 'Official'
+                                                      )
+                                       -- Student 204 does not have a name, so let's check here
+                                       and a.StudentUID = c.StudentUID
+                                       and c.FirstName is not null and ltrim(rtrim(c.FirstName)) != ''
+                                       and c.LastName is not null and ltrim(rtrim(c.FirstName)) != '';
+                                     
+      -- Insert Drops
+      insert into #sfish_student_transcript_summary
+                                    select a.StudentUID,
+                                           b.SROfferID,
+                                           b.CourseID,
+                                           a.TermCalendarID,
+                                           b.Credits,
+                                           null,
+                                           '02',  -- Drop, could be changed to  06 Admin drop 
+                                           null,
+                                           null,
+                                           null GradeMod
+                                      from SROfferEnrollment a, SROffer b, Student c
+                                     where a.TermCalendarID IN ( select TermCalendarID
+                                                                   from TermCalendar
+                                                                  where ( TermStartDate between getdate()-{{past_days}} and getdate()+{{future_days}}
+                                                                         or TermEndDate between getdate()-{{past_days}} and getdate()+{{future_days}} )
+                                                                    and ActiveFlag = 1
+                                                                    and DisplayInStudentPortal = 1 )
+                                       and Pending = 0
+                                       and AffectEnrolled = -1
+                                       and a.SROfferID = b.SROfferID
+                                       and b.Department != 'BFIT'
+                                       and substring(b.Department,1,1) != '.'
+                                       and not exists ( select 'Y' from SROfferEnrollment d
+                                                         where a.StudentUID = d.StudentUID
+                                                           and a.TermCalendarID = d.TermCalendarID
+                                                           and a.SROfferID = d.SROfferID
+                                                           and d.Pending = 0
+                                                           and d.AffectEnrolled = 1
+                                                           and d.ReservationBooked >= a.ReservationExpires
+                                                      )             
+                                       and not exists ( select 'Y' from SRAcademic b
+                                                         where a.StudentUID = b.StudentUID
+                                                           and a.TermCalendarID = b.TermCalendarID
+                                                           and a.SROfferID = b.SROfferID
+                                                           -- and b.RegistrationStatus = 'Official'
+                                                      )
+                                       -- Student 204 does not have a name, so let's check here
+                                       and a.StudentUID = c.StudentUID
+                                       and c.FirstName is not null and ltrim(rtrim(c.FirstName)) != ''
+                                       and c.LastName is not null and ltrim(rtrim(c.FirstName)) != '';
+]]>
+        </entry>
+
+
+        <entry key="CreateTemporary.#sfish_course_section_summary">
+<![CDATA[
+begin try
+  drop table #sfish_course_section_summary
+end try
+begin catch
+end catch
+        create table #sfish_course_section_summary(section_uid varchar(100),
+                                                   course_uid varchar(100),
+                                                   term_id varchar(100),
+                                                   subj_cde varchar(100),
+                                                   crse_no varchar(100),
+                                                   section_no varchar(100),
+                                                   section_name varchar(100),
+                                                   deliver_mthd varchar(100),
+                                                   start_dt datetime,
+                                                   end_dt datetime);
+
+/* deliver_mthd
+- 	01 – Face-to-face
+-	02 – Online
+-	03 – Hybrid
+-	99 – Other
+*/
+        insert into #sfish_course_section_summary
+                                    select a.SROfferID, 
+                                           a.CourseID,
+                                           a.TermCalendarID,
+                                           null Subject, 
+                                           null Number,
+                                           a.Section,
+                                           a.Coursename, 
+                                           null deliver_mthd,
+                                           a.StartDate,
+                                           a.EndDate 
+                                      from SROffer a,
+                                           -- CourseInformation b,
+                                           ( select distinct section_uid, term_id from #sfish_student_transcript_summary ) c
+                                           -- CourseInformationSubject d
+                                     where a.SROfferID = c.section_uid
+                                       and a.TermCalendarID = c.term_id;
+                                       -- and a.SROfferID = b.SROfferID;
+                                       -- and b.CISubjectId = d.CISubjectID;
+]]>
+        </entry>
+
+        <entry key="CreateTemporary.#sfish_faculty_summary">
+<![CDATA[
+begin try
+  drop table #sfish_faculty_summary
+end try
+begin catch
+end catch
+
+        create table #sfish_faculty_summary(section_uid varchar(100),
+                                            term_id varchar(100),
+                                            faculty_uid varchar(100),
+                                            user_role varchar(100)); -- INSTRUCTOR, TA
+
+        insert into #sfish_faculty_summary
+                                    select a.SROfferID,
+                                           b.TermCalendarID,
+                                           a.FacultyID,   -- Same number range than students... should I prefix with s vs. f ?
+                                           'Instructor' -- TAs?
+                                      from CAMS_SROfferFacultyTeach_View a,
+                                           SROffer b,
+                                           ( select distinct section_uid, term_id from #sfish_student_transcript_summary ) c
+                                     where a.SROfferID = c.section_uid
+                                       and a.SROfferId = b.SROfferID
+                                       and b.TermCalendarID = c.term_id;
+]]>
+        </entry>
+  
+        <entry key="CreateTemporary.#sfish_users_summary">
+<![CDATA[
+begin try
+  drop table #sfish_users_summary
+end try
+begin catch
+end catch
+
+        create table #sfish_users_summary(prefix varchar(100),
+                                          person_uid varchar(100),
+                                          student int,
+                                          faculty int,
+                                          employee int);
+
+        insert into #sfish_users_summary  
+                                 select t.prefix, t.uid, max(t.student), max(t.faculty), max(t.employee)
+                                   from ( select distinct 's' prefix, student_uid uid, 1 student, 0 faculty, 0 employee from #sfish_student_transcript_summary 
+                                          union
+                                          select distinct 'f' prefix, faculty_uid uid, 0 student, 1 faculty, 0 employee from #sfish_faculty_summary 
+                                          union
+                                          select distinct 'e' prefix,  FacultyID uid, 0 student, 0 faculty, 1 employee 
+                                            from Faculty 
+                                           where FacultyID not in ( select faculty_uid from #sfish_faculty_summary where faculty_uid = FacultyID )
+                                             and Active = 1
+                                        ) t
+                                  group by t.prefix, t.uid;
+]]>
+        </entry>
+
+        <entry key="#sfish_terms.display_start">30</entry>
+        <entry key="#sfish_terms.display_end">30</entry>
+        <entry key="CreateTemporary.#sfish_terms">
+<![CDATA[
+begin try
+  drop table #sfish_terms
+end try
+begin catch
+end catch
+
+        create table #sfish_terms(term_id varchar(100),
+                                  term_type varchar(100),
+                                  parent_term_id varchar(100),
+                                  term_name varchar(100),
+                                  start_date datetime,
+                                  end_date datetime,
+                                  display_start_date datetime,
+                                  display_end_date datetime,
+                                  add_drop_date datetime,
+                                  prereg_start_date datetime,
+                                  prereg_end_date datetime,
+                                  reg_start_date datetime,
+                                  reg_end_date datetime,
+                                  census_date datetime);
+
+        insert into #sfish_terms
+                         select TermCalendarID term_id,
+                                CreditUnit term_type,
+                                null parent_term_id, -- There is a ParentID, but it may not be in the first selection, so it may give an error
+                                TextTerm term_name,
+                                TermStartDate start_date,
+                                TermEndDAte end_date,
+                                TermStartDate - {{display_start}} display_start_date,
+                                TermEndDate + {{display_end}} display_end_date,
+                                null add_drop_date,
+                                null prereg_start_date,
+                                null prereg_end_date,
+                                null reg_start_date,
+                                null reg_end_date,
+                                CensusDate census_date
+                          from TermCalendar a,
+                               ( select distinct term_id from #sfish_student_transcript_summary ) c
+                         where a.TermCalendarID = c.term_id;
+]]>
+        </entry>
+
+
+        <!-- ***************** FILES TO GENERATE ******************** -->
+        <!-- <entry key="NewLine">\n</entry> -->
+        <entry key="Files">enrollments,outcomes,sections,teaching,users,academic_calendar,demographics,admissions,student_program,program_catalog,student_term,financial_aid,organizations,orgmembership,relationships,attributes,prerequisites,attendance,scores</entry>
+
+        <!-- [CHANGE] Location where the files will be created -->
+        <entry key="ExtractLocation">starfish_extracts</entry>
+        <entry key="TempExtractLocation">starfish_extracts_temp</entry>
+        <entry key="AdapterConfig">datapump-common/config.xml</entry> 
+        <!-- <entry key="AdapterConfig">config.bfit.xml2</entry> -->
+        <entry key="Validate">C:\Users\venStarfish\Desktop\HobsonsTransfers\datapump-common;cmd /c start validate.cmd</entry>
+
+        <!-- [CHANGE] For each file if it needs to be generated or skipped -->
+        <entry key="enrollments.generate">1</entry>
+        <entry key="outcomes.generate">1</entry>
+        <entry key="sections.generate">1</entry>
+        <entry key="teaching.generate">1</entry>
+        <entry key="users.generate">1</entry>
+        <entry key="academic_calendar.generate">1</entry>
+        <entry key="attributes.generate">1</entry>
+        <entry key="organizations.generate">1</entry>
+        <entry key="orgmembership.generate">1</entry>
+        <entry key="relationships.generate">1</entry>
+        <entry key="attendance.generate">1</entry>
+        <!-- Pending CAMS implementation -->
+        <entry key="demographics.generate">0</entry>
+        <entry key="admissions.generate">0</entry>
+        <entry key="student_program.generate">0</entry>
+        <entry key="program_catalog.generate">0</entry>
+        <entry key="student_term.generate">0</entry>
+        <entry key="financial_aid.generate">0</entry>
+        <entry key="scores.generate">0</entry>
+        <entry key="prerequisites.generate">0</entry>
+       
+
+        <!-- For each file
+             - Name to generate
+             - Term based or one file for all terms 
+             - Fields
+             - Override script [NOT IMPLEMENTED]
+             - Variables for the query 
+             - Query (called 'template')
+        -->
+
+        <!-- ***************** CONFIGURATION: ENROLLMENTS  ******************** -->
+        <entry key="enrollments.filename">Enrollment.txt</entry>
+        <entry key="enrollments.term_based">1</entry>
+        <entry key="enrollments.distinct_terms">select distinct term_id from #sfish_student_transcript_summary</entry>
+        <entry key="enrollments.current_term"></entry>
+        <entry key="enrollments.fields">course_section_integration_id,user_integration_id,user_role,available_ind,credit_hours,last_access_date,authoritative_status,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="enrollments.override">@enrollment.sql</entry>
+        <entry key="enrollments.extra">--Enter extra logic here</entry>
+        <entry key="enrollments.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="enrollments.template">
+<![CDATA[
+select section_uid + '.' + term_id course_section_integration_id,
+       's' + student_uid user_integration_id,
+       'Student' user_role,
+       '1' available_ind, 
+       att_cred credit_hours, -- or we could use isnull(earn_cred, att_cred) 
+       null last_access_date, -- Last time the student accessed the course online, is this in CAMS?
+       enrl_status authoritative_status,
+       null modified_ts  
+  from #sfish_student_transcript_summary {{extra_tables}} 
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+   {{extra}} order by 1,2
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: OUTCOMES  ******************** -->
+        <entry key="outcomes.filename">Course_outcomes.txt</entry>
+        <entry key="outcomes.term_based">1</entry>
+        <entry key="outcomes.distinct_terms">select distinct term_id from #sfish_student_transcript_summary</entry>
+        <entry key="outcomes.current_term"></entry>
+        <entry key="outcomes.fields">user_integration_id,course_section_integration_id,midterm_grade,final_grade,credit_hours,enrollment_type,pass_fail,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="outcomes.override">@outcomes.sql</entry>
+        <entry key="outcomes.extra">--Enter extra logic here</entry>
+        <entry key="outcomes.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="outcomes.template">
+<![CDATA[
+select 's' + student_uid user_integration_id,
+       section_uid + '.' + term_id course_section_integration_id,
+       midterm_grd midterm_grade,
+       final_grd final_grade,
+       earn_cred credit_hours,
+       CASE WHEN final_grd in ( 'A','A-','B','B+','B-','C','C+','C-','D','D+','E','F' ) THEN 'L'
+            WHEN final_grd in ( 'CR','TR','O','NG' ) THEN 'L'
+            WHEN final_grd in ( 'I','W','WF','WP' ) THEN 'L'
+            WHEN final_grd in ( 'AU' ) THEN 'AU'
+            WHEN final_grd in ( 'P' ) THEN 'PF'
+            ELSE null 
+       END enrollment_type,
+       CASE WHEN final_grd in ( 'A','A-','B','B+','B-','C','C+','C-','D','D+','E' ) THEN 'P'
+            WHEN final_grd in ( 'P' ) THEN 'P'
+            WHEN final_grd in ( 'AU' ) THEN 'P'
+            WHEN final_grd in ( 'F' ) THEN 'F'
+            WHEN final_grd in ( 'CR','TR','O','NG' ) THEN 'F'
+            WHEN final_grd in ( 'I','W','WF','WP' ) THEN 'F'
+            ELSE null 
+       END pass_fail,
+       null modified_ts 
+  from #sfish_student_transcript_summary {{extra_tables}} 
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+   and ( final_grd not in ('', '-')
+      or midterm_grd not in ('', '-') )
+   {{extra}}
+ order by 1,2
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: SECTIONS  ******************** -->
+        <entry key="sections.filename">Sections.txt</entry>
+        <entry key="sections.term_based">1</entry>
+        <entry key="sections.distinct_terms">select distinct term_id from #sfish_course_section_summary</entry>
+        <entry key="sections.current_term"></entry>
+        <entry key="sections.fields">integration_id,course_section_name,course_section_id,start_dt,end_dt,term_id,course_integration_id,course_section_delivery,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="sections.override">@sections.sql</entry>
+        <entry key="sections.extra">--Enter extra logic here</entry>
+        <entry key="sections.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="sections.template">
+<![CDATA[
+select section_uid + '.' + term_id integration_id,
+       ltrim(rtrim(section_name)) course_section_name,
+       section_uid + '.' + term_id course_section_id,
+       -- 111 yyyy/mm/dd (replace / for -)
+       -- 120 yyyy-mm-dd hh:mi:ss
+       replace(convert(varchar(20), start_dt, 111),'/','-') start_dt,
+       replace(convert(varchar(20), end_dt, 111),'/','-') end_dt,
+       -- convert(varchar(20), end_dt, 120) end_dt,
+       term_id term_id,
+       course_uid + '.' + term_id course_integration_id, 
+       deliver_mthd course_section_delivery, 
+       --null maximum_enrollment_count,
+       --null credit_hours,
+       --null registration_call_number,
+       null modified_ts
+  from #sfish_course_section_summary {{extra_tables}}
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+    {{extra}}
+ order by 1
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: TEACHING  ******************** -->
+        <entry key="teaching.filename">Teaching.txt</entry>
+        <entry key="teaching.term_based">1</entry>
+        <entry key="teaching.distinct_terms">select distinct term_id from #sfish_faculty_summary</entry>
+        <entry key="teaching.current_term"></entry>
+        <entry key="teaching.fields">course_section_integration_id,user_integration_id,user_role,available_ind,last_access_date,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="teaching.override">@teaching.sql</entry>
+        <entry key="teaching.extra">--Enter extra logic here</entry>
+        <entry key="teaching.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="teaching.template">
+<![CDATA[
+select section_uid + '.' + term_id course_section_integration_id,
+       'f' + faculty_uid user_integration_id,
+       user_role user_role,
+       '1' available_ind,
+       null last_access_date, -- where to get it?
+       null modified_ts 
+  from #sfish_faculty_summary {{extra_tables}}
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+    {{extra}}
+ order by 1,2
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: USERS  ******************** -->
+        <entry key="users.filename">Users.txt</entry>
+        <entry key="users.term_based">0</entry>
+        <entry key="users.fields">integration_id,family_name,middle_name,given_name,email,secondary_email,student_id,user_id,gender,birth_dt,company,job_title,h_phone,b_phone,m_phone,available_ind,assign_student_role,allow_login,home_city,home_state,home_zip,home_county</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="users.override">@users.sql</entry>
+        <entry key="users.extra">--Enter extra logic here</entry>
+        <entry key="users.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="users.template">
+<![CDATA[
+select CASE a.prefix WHEN 's' THEN a.prefix + a.person_uid
+                     WHEN 'f' THEN a.prefix + a.person_uid
+                     WHEN 'e' THEN 'f' + a.person_uid
+                     ELSE '' 
+       END integration_id,
+       CASE a.prefix WHEN 's' THEN b.LastName 
+                     WHEN 'f' THEN c.LastName
+                     WHEN 'e' THEN c.LastName
+                     ELSE '' 
+       END family_name,
+       CASE a.prefix WHEN 's' THEN b.MiddleInitial
+                     WHEN 'f' THEN c.MiddleName
+                     WHEN 'e' THEN c.MiddleName
+                     ELSE '' 
+       END middle_name,
+       CASE a.prefix WHEN 's' THEN b.FirstName 
+                     WHEN 'f' THEN c.FirstName
+                     WHEN 'e' THEN c.FirstName
+                     ELSE '' 
+       END given_name,
+       CASE a.prefix WHEN 's' THEN isnull( nullif ( ( select ltrim(rtrim(a1.Email1)) from Student_Address s1, Address a1 
+                                                             where s1.StudentID = a.person_uid 
+                                                               and s1.AddressID = a1.AddressID
+                                                               and a1.ActiveFlag = 'Yes'
+                                                               and a1.AddressTypeID = 288 ), ''), 'none@bfit.edu')
+                     WHEN 'f' THEN isnull( nullif ( ( select ltrim(rtrim(a1.Email1)) from Faculty_Address f1, Address a1 
+                                                             where f1.FacultyID = a.person_uid 
+                                                               and f1.AddressID = a1.AddressID
+                                                               and a1.ActiveFlag = 'Yes' 
+                                                               and a1.AddressTypeID = 288 ), ''), 'none@bfit.edu')
+                     WHEN 'e' THEN isnull( nullif ( ( select ltrim(rtrim(a1.Email1)) from Faculty_Address f1, Address a1 
+                                                             where f1.FacultyID = a.person_uid 
+                                                               and f1.AddressID = a1.AddressID
+                                                               and a1.ActiveFlag = 'Yes' 
+                                                               and a1.AddressTypeID = 288 ), ''), 'none@bfit.edu')
+                     ELSE 'none@bfit.edu' 
+       END email,
+       '' secondary_email,
+       CASE a.prefix WHEN 's' THEN b.StudentID
+                     WHEN 'f' THEN ''
+                     WHEN 'e' THEN ''
+                     ELSE '' 
+       END student_id,
+       /*
+       CASE a.prefix WHEN 's' THEN isnull(( select PortalHandle from StudentPortal s2 where s2.StudentUID = a.person_uid ), a.prefix + a.person_uid)
+                     WHEN 'f' THEN isnull(( select PortalAlias from FacultyPortal f2 where f2.FacultyID = a.person_uid ), a.prefix + a.person_uid)
+                     WHEN 'e' THEN isnull(( select PortalAlias from FacultyPortal f2 where f2.FacultyID = a.person_uid ), 'f' + a.person_uid)
+                     ELSE a.prefix + a.person_uid 
+       END user_id,
+       */
+       CASE a.prefix WHEN 's' THEN isnull(( select PortalHandle from StudentPortal s2 where s2.StudentUID = a.person_uid ), a.prefix + a.person_uid)
+                     -- WHEN 'f' THEN d.CAMSUser
+                     -- WHEN 'e' THEN d.CAMSUser
+                     -- Defaulting to PortalAlias or ID if username does not exist
+                     WHEN 'f' THEN isnull(d.CAMSUser, isnull(( select PortalAlias from FacultyPortal f2 where f2.FacultyID = a.person_uid ), a.prefix + a.person_uid))
+                     WHEN 'e' THEN isnull(d.CAMSUser, isnull(( select PortalAlias from FacultyPortal f2 where f2.FacultyID = a.person_uid ), 'f' + a.person_uid))
+                     ELSE a.prefix + a.person_uid 
+       END user_id,
+       '' gender,
+       CASE a.prefix WHEN 's' THEN ''
+                     WHEN 'f' THEN c.Gender 
+                     WHEN 'e' THEN c.Gender
+                     ELSE '' 
+       END gender,
+       CASE a.prefix WHEN 's' THEN replace(convert(varchar(20), b.BirthDate, 111),'/','-') 
+                     WHEN 'f' THEN replace(convert(varchar(20), c.BirthDate, 111),'/','-') 
+                     WHEN 'e' THEN replace(convert(varchar(20), c.BirthDate, 111),'/','-') 
+                     ELSE '' 
+       END birth_dt,
+       '' company,
+       '' job_title,
+       '' h_phone,
+       '' b_phone,
+       '' m_phone,
+       CASE a.prefix WHEN 's' THEN '1'
+                     WHEN 'f' THEN CASE DisableLogin WHEN 1 THEN '0' ELSE '1' END
+                     WHEN 'e' THEN CASE DisableLogin WHEN 1 THEN '0' ELSE '1' END
+                     ELSE '' 
+       END available_ind,
+       CASE a.prefix WHEN 's' THEN '1'
+                     WHEN 'f' THEN '0'
+                     WHEN 'e' THEN '0'
+                     ELSE '' 
+       END assign_student_role,
+       CASE a.prefix WHEN 's' THEN '1'
+                     WHEN 'f' THEN CASE DisableLogin WHEN 1 THEN '0' ELSE '1' END
+                     WHEN 'e' THEN CASE DisableLogin WHEN 1 THEN '0' ELSE '1' END
+                     ELSE '' 
+       END allow_login,
+       '' home_city,
+       '' home_state,
+       '' home_zip,
+       '' home_county
+  from #sfish_users_summary a
+        left join Student b on ( a.prefix ='s' and a.person_uid = b.StudentUID )
+        left join Faculty c on ( a.prefix in ('f','e') and a.person_uid = c.FacultyID )
+        left join CAMSUser d on ( a.prefix in ('f','e') and a.person_uid = d.FacultyID ) 
+               -- and d.CAMSUserID Using wrong ID
+        {{extra_tables}}
+    {{extra}}
+ order by 1
+]]>
+        </entry>
+
+
+        <!-- ***************** CONFIGURATION: ACADEMIC CALENDAR  ******************** -->
+        <entry key="academic_calendar.filename">Academic_calendar.txt</entry>
+        <entry key="academic_calendar.term_based">0</entry>
+        <entry key="academic_calendar.fields">term_id,term_name,start_date,end_date,display_start_date,display_end_date,add_drop_date,term_type,parent_term_id,census_date,prereg_start_date,prereg_end_date,reg_start_date,reg_end_date,persistence_relevant,visible,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="academic_calendar.override">@academic_calendar.sql</entry>
+        <entry key="academic_calendar.extra">--Enter extra logic here</entry>
+        <entry key="academic_calendar.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="academic_calendar.template">
+<![CDATA[
+/*
+03 Aug 2015 16:45:49,873 ERROR Academic_calendar.txt: 2: Field 5 (display_start_date) is required but missing
+03 Aug 2015 16:45:49,873 ERROR Academic_calendar.txt: 2: Field 6 (display_end_date) is required but missing
+03 Aug 2015 16:45:49,873 ERROR Academic_calendar.txt: 2: Field 16 (visible)  failed data evaluation
+*/
+select term_id,
+       term_name,
+       replace(convert(varchar(20), start_date, 111),'/','-') start_date,
+       replace(convert(varchar(20), end_date, 111),'/','-') end_date,
+       replace(convert(varchar(20), display_start_date, 111),'/','-') display_start_date,
+       replace(convert(varchar(20), display_end_date, 111),'/','-') display_end_date,
+       replace(convert(varchar(20), add_drop_date, 111),'/','-') add_drop_date,
+/*
+	01 – to indicate a full term (i.e., semester, quarter or trimester)
+	02 – to indicate an academic year
+	03 – to indicate a session
+*/
+       null term_type,
+       replace(convert(varchar(20), parent_term_id, 111),'/','-') parent_term_id,
+       replace(convert(varchar(20), census_date, 111),'/','-') census_date, 
+       replace(convert(varchar(20), prereg_start_date, 111),'/','-') prereg_start_date,
+       replace(convert(varchar(20), prereg_end_date, 111),'/','-') prereg_end_date,
+       replace(convert(varchar(20), reg_start_date, 111),'/','-') reg_start_date,
+       replace(convert(varchar(20), reg_end_date, 111),'/','-') reg_end_date,
+       null persistence_relevant,
+       'Y' visible,
+       null modified_ts
+  from #sfish_terms a
+       {{extra_tables}}
+    {{extra}}
+ order by 1
+]]>
+        </entry>
+
+       
+        <!-- ***************** CONFIGURATION: ATTRIBUTES  ******************** -->
+        <entry key="attributes.filename">Attributes.txt</entry>
+        <entry key="attributes.term_based">0</entry>
+        <entry key="attributes.fields">user_integration_id,attribute_key,attribute_value,modified_ts</entry>
+        <entry key="attributes.class">com.starfish.sisintegration.AttributesFileGenerator</entry>
+        <!-- [CHANGE] Add the attributes your institution will need, and add a section for the query of each of those attributes -->
+        <entry key="attributes.list">ACADEMICPROGRAM,ACADEMICSTANDING,ENROLLSTATUS,ATTENDTYPE,HSGPA,SUCCESSBOSTON</entry>
+        <entry key="attributes.list.unions"></entry>
+<!--
+ACADEMICPROGRAM	Major	String	Mechanical Engineering Technology	Major: ${VALUE}
+ENROLLSTATUS	Enrollment Status	Enumeration	1st Time Freshman	Enrollment Status: ${VALUE}
+ACADEMICSTANDING	Academic Standing	Enumeration	Probation	Academic Standing: ${VALUE}
+ATTENDTYPE	DRM Status	String	TRUE	DRM Resident: ${VALUE}
+HSGPA	High School GPA	Numeric	2.00	GPA: ${VALUE}
+SUCCESSBOSTON	Success Boston	String	Sociedad Latina	Success Boston: ${VALUE}
+-->
+       
+        <!-- TODO, override still not implemented -->
+        <entry key="attributes.override">@attributes.sql</entry>
+        <entry key="attributes.extra">--Enter extra logic here</entry>
+        <entry key="attributes.extra_tables">--Enter extra tables for the join</entry>
+        <!-- [DO NOT CHANGE] The main query for the attributes file. Change each of the individual queries for the attributes -->
+        <entry key="attributes.template">
+<![CDATA[
+with stu_users as (
+  select distinct student_uid --, term_id 
+    from #sfish_student_transcript_summary 
+) 
+{{list.unions}}
+order by 1,2
+]]>
+        </entry>
+        <entry key="attributes.ACADEMICPROGRAM.template">
+<![CDATA[
+select 's' + student_uid user_integration_id,
+       'ACADEMICPROGRAM' attribute_key,
+       MajorDegree attribute_value,
+       null modified_ts
+  from stu_users, CAMS_StudentProgram_View a
+ where a.StudentUID = student_uid
+   and a.TermCalendarID = ( select max(b.TermCalendarID) 
+                              from CAMS_StudentProgram_View b
+                             where b.StudentUID = a.StudentUID )
+   -- and a.TermCalendarID = stu_users.term_id
+   and MajorDegree is not null
+   and ltrim(rtrim(MajorDegree)) != ''
+]]>
+        </entry>
+        <entry key="attributes.ACADEMICSTANDING.template">
+<![CDATA[
+select 's' + student_uid user_integration_id,
+       'ACADEMICSTANDING' attribute_key,
+       c.Status attribute_value,
+       null modified_ts
+  from stu_users, Student a, StudentStatus b, StatusCode c
+ where a.StudentUID = stu_users.student_uid
+   and b.TermCalendarID = ( select max(d.TermCalendarID) 
+                              from StudentStatus d 
+                             where d.StudentUID = a.StudentUID )
+   -- and b.TermCalendarID = stu_users.term_id
+   and a.StudentUID = b.StudentUID
+   and b.AcademicStatusID = c.StatusCodeID
+   and c.Status is not null
+   and ltrim(rtrim(c.Status)) != ''
+]]>
+        </entry>
+        <entry key="attributes.ENROLLSTATUS.template">
+<![CDATA[
+select 's' + student_uid user_integration_id,
+       'ENROLLSTATUS' attribute_key,
+       StudentStatus attribute_value,
+       null modified_ts
+  from stu_users, CAMS_StudentProgram_View a
+ where a.StudentUID = student_uid
+   and a.TermCalendarID = ( select max(b.TermCalendarID) 
+                              from CAMS_StudentProgram_View b
+                             where b.StudentUID = a.StudentUID )
+   -- and a.TermCalendarID = stu_users.term_id
+   and StudentStatus is not null
+   and ltrim(rtrim(StudentStatus)) != ''
+]]>
+        </entry>
+        <entry key="attributes.ATTENDTYPE.template">
+<![CDATA[
+select 's' + student_uid user_integration_id,
+       'ATTENDTYPE' attribute_key,
+       a.AttendanceType attribute_value,
+       null modified_ts
+  from stu_users, CAMS_Student_View a 
+ where stu_users.student_uid = a.StudentUID
+   and a.AttendanceType is not null
+   and ltrim(rtrim(a.AttendanceType)) != ''
+   and AttendanceTypeID = '3733' -- DRM, do Production has the same Type?
+]]>
+        </entry>
+        <entry key="attributes.HSGPA.template">
+<![CDATA[
+( select 's' + student_uid user_integration_id,
+         'HSGPA' attribute_key,
+         CONVERT(varchar(10),max(round(HSGPA1,2))) attribute_value,
+         null modified_ts
+    from stu_users, StudentHighSchool a
+   where stu_users.student_uid = a.StudentUID
+   group by student_uid )
+]]>
+        </entry>
+        <entry key="attributes.SUCCESSBOSTON.template">
+<![CDATA[
+select 's' + student_uid user_integration_id,
+       'SUCCESSBOSTON' attribute_key,
+       a.ContactType attribute_value,
+       null modified_ts
+  from stu_users, CAMS_StudentContacts_View a
+ where stu_users.student_uid = a.StudentUID
+   and a.ContactType = 'CBO'
+]]>
+        </entry>
+<!-- Copy this templat for new Attributes
+        <entry key="attributes.NAME.template">
+<![CDATA[
+select 's' + student_uid user_integration_id,
+       'NAME' attribute_key,
+       'NA' attribute_value,
+       null modified_ts
+  from stu_users 
+]]>
+        </entry>
+-->
+
+<!-- 
+1/ Primary Advisor (including EAC)	
+Students assigned as their Advisees	Stored in CAMS
+2/ Secondary Advisor (Warning, Suspension, Probation)	
+Based on Academic Status for the prior semester	Academic Status is located in CAMS, secondary advisor status for probation students is____, Warning students is split between two Success Coaches. We should assign these by an Activity code in CAMS because we can do this by semester and can easily shift from warning to suspension or vice versa and pull this into Starfish - this is currently a sticky note.
+-->
+        <!-- ***************** CONFIGURATION: RELATIONSHIPS  ******************** -->
+        <entry key="relationships.filename">relationships.txt</entry>
+        <entry key="relationships.term_based">1</entry>
+        <entry key="relationships.distinct_terms">select distinct term_id from #sfish_student_transcript_summary</entry>
+        <entry key="relationships.current_term"></entry>
+        <entry key="relationships.fields">parent_integration_id,parent_role,child_id,child_role,term_id</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="relationships.override">@academic_calendar.sql</entry>
+        <entry key="relationships.extra">--Enter extra logic here</entry>
+        <entry key="relationships.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="relationships.template">
+<![CDATA[
+   select distinct 'f' + fac_users.person_uid parent_integration_id,
+          'Primary Advisor' parent_role,
+          's' + stu_users.student_uid child_id,
+          'STUDENT' child_role,
+          stu_users.term_id term_id
+     from Student a, StudentProgram b, StudentStatus c, CAMSUser d, Faculty e,
+          ( select distinct student_uid, term_id from #sfish_student_transcript_summary ) stu_users,
+          ( select distinct prefix, person_uid from #sfish_users_summary where employee = 1 or faculty = 1 ) fac_users
+    where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+      and a.StudentUID = c.StudentUID
+      and b.StudentStatusID = c.StudentStatusID
+      and b.AdvisorID = d.AdvisorID
+      and d.FacultyId = e.FacultyID
+      and a.StudentUID = stu_users.student_uid
+      and c.TermCalendarId = stu_users.term_id
+      and e.facultyID = fac_users.person_uid 
+    order by 1,3
+]]>
+        </entry>
+
+
+<!-- Organization
+select a.StudentUID, b.TermCalendarID, c.Status
+  from Student a, StudentStatus b, StatusCode c
+ where a.StudentUID = b.StudentUID
+   and b.AcademicStatusID = c.StatusCodeID
+   and c.Status in ('CONTINUED PROBATION', 'PROBATION', 'SUSPENSION', 'WARNING');
+-->
+        <!-- ***************** CONFIGURATION: ORGANIZATIONS  ******************** -->
+        <entry key="organizations.filename">Organizations.txt</entry>
+        <entry key="organizations.term_based">0</entry>
+        <entry key="organizations.fields">integration_id,organization_name,organization_id,start_dt,end_dt,modified_ts,term_id</entry>
+        <entry key="organizations.class">com.starfish.sisintegration.AttributesFileGenerator</entry>
+        <entry key="organizations.list">ACADEMICSTATUS,MAJOR</entry>
+        <entry key="organizations.list.unions"></entry>
+       
+        <!-- TODO, override still not implemented -->
+        <entry key="organizations.override">@organizations.sql</entry>
+        <entry key="organizations.extra">--Enter extra logic here</entry>
+        <entry key="organizations.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="organizations.template">
+<![CDATA[
+  select integration_id,
+         organization_name,
+         organization_id,
+         start_dt,
+         end_dt,
+         modified_ts,
+         term_id
+    from ( {{list.unions}} ) a
+   order by 1,2
+]]>
+        </entry>
+        <entry key="organizations.ACADEMICSTATUS.template">
+<![CDATA[
+select term_id + '_' + CASE Status WHEN 'CONTINUED PROBATION' THEN 'PROBATION' ELSE Status END integration_id,
+       -- change to calendar
+       TextTerm + ' ' + CASE Status WHEN 'CONTINUED PROBATION' THEN 'PROBATION' ELSE Status END organization_name,
+       term_id + '_' + CASE Status WHEN 'CONTINUED PROBATION' THEN 'PROBATION' ELSE Status END organization_id,
+       null start_dt,
+       null end_dt,
+       null modified_ts,
+       term_id
+  from ( select distinct term_id from #sfish_student_transcript_summary) stu_users,
+       StatusCode, TermCalendar
+ where Status in ('CONTINUED PROBATION', 'PROBATION', 'SUSPENSION', 'WARNING')
+   and TermCalendarID = stu_users.term_id
+]]>
+        </entry>
+
+        <entry key="organizations.MAJOR.template">
+<![CDATA[
+select distinct 
+       term_id + '_' + MajorDegree integration_id,
+       TextTerm + ' ' + MajorDegree organization_name,
+       term_id + '_' + MajorDegree organization_id,
+       null start_dt,
+       null end_dt,
+       null modified_ts,
+       term_id
+  from ( select distinct student_uid, term_id from #sfish_student_transcript_summary) stu_users,
+       CAMS_StudentProgram_View a, TermCalendar b
+ where a.StudentUID = student_uid
+   and a.TermCalendarID = term_id
+   and MajorDegree is not null
+   and ltrim(rtrim(MajorDegree)) != ''
+   and b.TermCalendarID = term_id
+]]>
+        </entry>
+
+
+        <!-- ***************** CONFIGURATION: ORGANIZATION MEMBERSHIP  ******************** -->
+        <entry key="orgmembership.filename">Orgmembership.txt</entry>
+        <entry key="orgmembership.term_based">0</entry>
+        <entry key="orgmembership.fields">organization_integration_id,user_integration_id,user_role,available_ind,start_date,end_date,last_access_date,modified_ts</entry>
+        <entry key="orgmembership.class">com.starfish.sisintegration.AttributesFileGenerator</entry>
+        <entry key="orgmembership.list">ACADEMICSTATUS,MAJOR</entry>
+        <entry key="orgmembership.list.unions"></entry>
+       
+        <!-- TODO, override still not implemented -->
+        <entry key="orgmembership.override">@orgmembership.sql</entry>
+        <entry key="orgmembership.extra">--Enter extra logic here</entry>
+        <entry key="orgmembership.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="orgmembership.template">
+<![CDATA[
+  select organization_integration_id,
+         user_integration_id,
+         user_role,
+         available_ind,
+         start_date,
+         end_date,
+         last_access_date,
+         modified_ts
+    from ( {{list.unions}} ) a
+   order by 1,2
+]]>
+        </entry>
+        <entry key="orgmembership.ACADEMICSTATUS.template">
+<![CDATA[
+select stu_users.term_id + '_' + CASE c.Status WHEN 'CONTINUED PROBATION' THEN 'PROBATION' ELSE c.Status END organization_integration_id,
+       's' + stu_users.student_uid user_integration_id, 
+       'STUDENT' user_role,
+       1 available_ind,
+       null start_date,
+       null end_date,
+       null last_access_date,
+       null modified_ts
+  from Student a, StudentStatus b, StatusCode c,
+       ( select distinct student_uid, term_id from #sfish_student_transcript_summary) stu_users
+ where a.StudentUID = stu_users.student_uid
+   and b.TermCalendarID = stu_users.term_id 
+   and a.StudentUID = b.StudentUID
+   and b.AcademicStatusID = c.StatusCodeID
+   and c.Status in ('CONTINUED PROBATION', 'PROBATION', 'SUSPENSION', 'WARNING')
+]]>
+        </entry>
+
+        <entry key="orgmembership.MAJOR.template">
+<![CDATA[
+select stu_users.term_id + '_' + MajorDegree organization_integration_id,
+       's' + stu_users.student_uid user_integration_id, 
+       'STUDENT' user_role,
+       1 available_ind,
+       null start_date,
+       null end_date,
+       null last_access_date,
+       null modified_ts
+  from CAMS_StudentProgram_View a,
+       ( select distinct student_uid, term_id from #sfish_student_transcript_summary) stu_users
+ where a.StudentUID = stu_users.student_uid
+   and a.TermCalendarID = stu_users.term_id
+   and MajorDegree is not null
+   and ltrim(rtrim(MajorDegree)) != ''
+]]>
+        </entry>
+
+        <!-- ***************** CONFIGURATION: ATTENDANCE  ******************** -->
+        <entry key="attendance.filename">Attendance.txt</entry>
+        <entry key="attendance.term_based">1</entry>
+        <entry key="attendance.distinct_terms">select distinct term_id from #sfish_student_transcript_summary</entry>
+        <entry key="attendance.current_term"></entry>
+        <!-- need to move this to cusstom for the class -->
+        <entry key="attendance.fields">user_integration_id,course_section_integration_id,meeting_date,attendance_status,modified_ts</entry>
+        <!-- TODO, override still not implemented -->
+        <entry key="attendance.override">@attendance.sql</entry>
+        <entry key="attendance.extra">--Enter extra logic here</entry>
+        <entry key="attendance.extra_tables">--Enter extra tables for the join</entry>
+        <entry key="attendance.template">
+<![CDATA[
+select 's' + a.student_uid user_integration_id,
+       section_uid + '.' + term_id course_section_integration_id,
+       replace(convert(varchar(20), SADate, 111),'/','-') meeting_date,
+/*
+1049	1037	1	Absent	Student was absent from class
+1050	1037	3	Late	Student was late
+1051	1037	7	Tardy	Student was tardy
+1052	1037	2	Excused	Student was excused
+1053	1037	4	Left Early	Student left early
+1054	1037	6	Present	Student was present
+1055	1037	5	Other	See comment for explaination
+*/
+       CASE StatusID WHEN 1049 THEN 'ABSENT'
+                     WHEN 1050 THEN 'TARDY'
+                     WHEN 1051 THEN 'TARDY'
+                     WHEN 1052 THEN 'EXCUSED'
+                     WHEN 1053 THEN 'PRESENT'  
+                     WHEN 1054 THEN 'PRESENT'
+       /* ignored
+                     WHEN 1055 THEN 'ABSENT' -- Need confirmation
+       ELSE 'PRESENT'                        -- Need confirmation
+       */
+       END attendance_status,
+       null modified_ts
+  from #sfish_student_transcript_summary a,
+       StudentAttendance b {{extra_tables}}
+ where ( {{term_based}} = 0 or term_id = '{{current_term}}' )
+   and a.student_uid = b.StudentUID
+   and a.section_uid = b.SROfferID
+   and a.term_id = b.TermCalendarID
+   and StatusID in (1049,1050,1051,1052,1053,1054)
+    {{extra}}
+ order by 1,2,3
+]]>
+        </entry>
+</properties>
